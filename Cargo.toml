@@ -1,0 +1,18 @@
+cargo-features = ["named-profiles"]
+
+[package]
+name = "porte"
+version = "0.0.0"
+edition = "2018"
+
+[profile.coverage]
+inherits="test"
+
+
+[lib]
+name = "libporte"
+path = "src/lib.rs"
+
+[[bin]]
+name = "portevalider"
+path = "src/valider.rs"
