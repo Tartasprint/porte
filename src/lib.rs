@@ -1,6 +1,9 @@
 //#![deny(missing_docs)]
 //! A crate for parsing JSON
 #![deny(clippy::panic,clippy::missing_panics_doc)]
+#![feature(type_alias_impl_trait)]
+
+use std::{iter::Peekable, str::Chars};
 mod lexer;
 mod number;
 mod idioms;
@@ -10,17 +13,14 @@ mod token;
 pub mod err;
 
 /// Parses a JSON text and returns the corresponding constructed `Value`
-pub fn parse(s: Box<dyn Iterator<Item = char>>) -> Result<value::Value,err::TokenizeError> {
-    let s: Vec<char> = s.collect();
+pub fn parse(mut s: Peekable<Chars>) -> Result<value::Value,err::TokenizeError> {
     let mut r = Vec::<token::Token>::new();
-    let mut pos = 0_usize;
     loop {
-        match lexer::read_token(&s, pos) {
-            Ok((Some(t), new_pos)) =>  {
-                pos = new_pos;
+        match lexer::read_token(&mut s) {
+            Ok(Some(t)) =>  {
                 r.push(t);
             },
-            Ok((None, _)) => break,
+            Ok(None) => break,
             Err(e) => return Err(e),
         }
     }

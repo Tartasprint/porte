@@ -1,5 +1,7 @@
 //! Common tasks in parsing
 
+use std::str::Chars;
+
 use crate::err::TokenizeError;
 
 /// A `Reader` to read one or more times with the same `reader`.
@@ -16,16 +18,14 @@ use crate::err::TokenizeError;
 /// assert_eq!(Ok((vec![13,14,10,13,11,14,14,15],8usize)),read_one_or_more(&i,0usize, read_hexdigit));
 ///```
 
-pub(crate) fn read_one_or_more<T>(input: &[char], mut pos: usize, reader: Reader<T>) -> Result<(Vec<T>, usize), TokenizeError> {
-    match reader(input, pos) {
-        Ok((t, new_pos)) => {
-            pos = new_pos;
+pub(crate) fn read_one_or_more<T>(input: Input, reader: Reader<T>) -> ReaderResult<Vec<T>> {
+    match reader(input) {
+        Ok(t) => {
             let mut r = vec![t];
-            while let Ok((t,new_pos)) = reader(input, pos) {
-                pos = new_pos;
+            while let Ok(t) = reader(input) {
                 r.push(t);
             }
-            Ok((r, pos))
+            Ok(r)
         }
         Err(e) => Err(e),
     }
@@ -46,18 +46,20 @@ pub(crate) fn read_one_or_more<T>(input: &[char], mut pos: usize, reader: Reader
 /// let other:  Vec<char> = "HEAD / HTTP/1.1".chars().collect();
 /// assert_eq!(Err(TokenizeError::LitteralDidntMatch), read_string(&other, 0usize, "POST"));
 /// ```
-pub(crate) fn read_string(input: &[char], mut pos: usize, s: &str) -> Result<((),usize),TokenizeError> {
-    for c in s.chars() {
-        if pos < input.len() && input[pos] == c {
-            pos += 1;
-        } else {
-            return Err(TokenizeError::LitteralDidntMatch);
+pub(crate) fn read_string(input: Input, s: &str) -> ReaderResult<()> {
+    for sc in s.chars() {
+        match input.next() {
+            Some(ic) => if ic != sc {
+                return Err(TokenizeError::LitteralDidntMatch);    
+            }
+            None => return Err(TokenizeError::LitteralDidntMatch)
         }
     };
-    Ok(((),pos))
+    Ok(())
 }
 
 
+pub(crate) type Input<'a> = &'a mut std::iter::Peekable<Chars<'a>>;
 /// A `Reader` is a function wich receives an `input` and a the `pos` of the next
 /// character to be read. It returns `Ok((t, new_pos))` where `t` is the information
 /// processed and `new_pos` the new position (if all the parsing went well, Err(())
@@ -65,6 +67,6 @@ pub(crate) fn read_string(input: &[char], mut pos: usize, s: &str) -> Result<(()
 ///
 /// # Note
 /// An implementation should be resistant to invalid `pos`.
-type Reader<T> = fn(input: &[char], pos: usize) -> ReaderResult<T>;
+type Reader<T> = fn(input: Input) -> ReaderResult<T>;
 
-pub(crate) type ReaderResult<T> = Result<(T,usize), TokenizeError>;
+pub(crate) type ReaderResult<T> = Result<T, TokenizeError>;
