@@ -16,8 +16,8 @@ use libporte::{err::TokenizeError, parse};
 fn main() {
     let s: Vec<String> = env::args().collect();
     let s = &s[1];
-    let s: Vec<char> = match read_to_string(s) {
-        Ok(s) => s.chars().collect(),
+    let s = match read_to_string(s) {
+        Ok(s) => s,
         Err(e) => {
             if e.kind() == ErrorKind::InvalidData {
                 exit(1);
@@ -26,7 +26,8 @@ fn main() {
             }
         }
     };
-    exit(match parse(Box::new(s.into_iter())) {
+    let s = s.chars().peekable();
+    exit(match parse(s) {
         Ok(_) => EXIT_VALID,
         Err(TokenizeError::InternalError(e)) => {
             dbg!(e);

@@ -1,4 +1,8 @@
-use crate::{err::{TokenizeError, debug, internal_error}, token::Token, value::Value};
+use crate::{
+    err::{internal_error, TokenizeError},
+    token::Token,
+    value::Value,
+};
 
 enum AST {
     IncompleteArray(Vec<Value>),
@@ -15,10 +19,16 @@ impl AST {
     }
 
     /// Push something into the inner incomplete value
-    fn push(&mut self, value: Value, key: Option<String>) -> Result<(),TokenizeError> {
+    fn push(&mut self, value: Value, key: Option<String>) -> Result<(), TokenizeError> {
         match self {
-            Self::IncompleteArray(a) => {a.push(value);Ok(())},
-            Self::IncompleteObject(o) => {o.push((key.ok_or_else(|| internal_error!())?, value));Ok(())},
+            Self::IncompleteArray(a) => {
+                a.push(value);
+                Ok(())
+            }
+            Self::IncompleteObject(o) => {
+                o.push((key.ok_or_else(|| internal_error!())?, value));
+                Ok(())
+            }
         }
     }
 }
@@ -40,13 +50,17 @@ enum ParserState {
 /// Procedure applied when the current parsed array has ended.
 ///
 /// # Panics
-/// 
+///
 /// As stated above, the current value being parsed must be an array, that is
 /// the last item in the `stack` has to be an `AST::IncompleteArray(_)`, otherwise
 /// it will `panic!()`.
 /// If the value of the array has to be  put in an object a key will be popped from
 /// the `key_stack`, if that isn't possible it will panic.
-fn array_end(state: &mut ParserState, stack: &mut Vec<AST>, key_stack: &mut Vec<String>) -> Result<(),TokenizeError> {
+fn array_end(
+    state: &mut ParserState,
+    stack: &mut Vec<AST>,
+    key_stack: &mut Vec<String>,
+) -> Result<(), TokenizeError> {
     if let Some(AST::IncompleteArray(s)) = stack.pop() {
         match stack.last_mut() {
             Some(AST::IncompleteArray(a)) => {
@@ -54,7 +68,10 @@ fn array_end(state: &mut ParserState, stack: &mut Vec<AST>, key_stack: &mut Vec<
                 *state = ParserState::InArrayLastWasValue;
             }
             Some(AST::IncompleteObject(o)) => {
-                o.push((key_stack.pop().ok_or_else(|| internal_error!())?, Value::Array(s)));
+                o.push((
+                    key_stack.pop().ok_or_else(|| internal_error!())?,
+                    Value::Array(s),
+                ));
                 *state = ParserState::InObjectLastWasValue;
             }
             None => {
@@ -70,13 +87,17 @@ fn array_end(state: &mut ParserState, stack: &mut Vec<AST>, key_stack: &mut Vec<
 /// Procedure applied when the current parsed object has ended.
 ///
 /// # Panics
-/// 
+///
 /// As stated above, the current value being parsed must be an object, that is
 /// the last item in the `stack` has to be an `AST::IncompleteObject(_)`, otherwise
 /// it will `panic!()`.
 /// If the value of the array has to be  put in an object a key will be popped from
 /// the `key_stack`, if that isn't possible it will panic.
-fn object_end(state: &mut ParserState, stack: &mut Vec<AST>, key_stack: &mut Vec<String>) -> Result<(),TokenizeError>  {
+fn object_end(
+    state: &mut ParserState,
+    stack: &mut Vec<AST>,
+    key_stack: &mut Vec<String>,
+) -> Result<(), TokenizeError> {
     if let Some(AST::IncompleteObject(s)) = stack.pop() {
         match stack.last_mut() {
             Some(AST::IncompleteArray(a)) => {
@@ -84,7 +105,10 @@ fn object_end(state: &mut ParserState, stack: &mut Vec<AST>, key_stack: &mut Vec
                 *state = ParserState::InArrayLastWasValue;
             }
             Some(AST::IncompleteObject(o)) => {
-                o.push((key_stack.pop().ok_or_else(|| internal_error!())?, Value::Object(s)));
+                o.push((
+                    key_stack.pop().ok_or_else(|| internal_error!())?,
+                    Value::Object(s),
+                ));
                 *state = ParserState::InObjectLastWasValue;
             }
             None => {
@@ -102,62 +126,76 @@ pub(crate) fn parse(input: Vec<Token>) -> Result<Value, TokenizeError> {
     let mut stack: Vec<AST> = Vec::new();
     let mut key_stack: Vec<String> = Vec::new();
     let mut input = input.into_iter();
-    while let Some(t) = debug!(input.next()) {
-       debug!(&state);
+    while let Some(t) = input.next() {
         match state {
             ParserState::Begin => match t {
                 Token::ArrayBegin => {
                     state = ParserState::InArrayEmpty;
-                    stack.push(AST::new_array());
-                }
+                    stack.push(AST::new_array());                }
                 Token::ObjectBegin => {
                     state = ParserState::InObjectEmpty;
                     stack.push(AST::new_object());
                 }
-                Token::False => state= ParserState::End(Value::False),
-                Token::True => state= ParserState::End(Value::True),
-                Token::Null => state= ParserState::End(Value::Null),
-                Token::String(s) => state= ParserState::End(Value::String(s)),
-                Token::Number(n) => state= ParserState::End(Value::Number(n)),
+                Token::False => state = ParserState::End(Value::False),
+                Token::True => state = ParserState::End(Value::True),
+                Token::Null => state = ParserState::End(Value::Null),
+                Token::String(s) => state = ParserState::End(Value::String(s)),
+                Token::Number(n) => state = ParserState::End(Value::Number(n)),
                 Token::WhiteSpace => continue,
                 Token::ArrayEnd
                 | Token::ObjectEnd
                 | Token::NameSeparator
-                | Token::ValueSeparator => return Err(TokenizeError::UnexpectedToken(t))
+                | Token::ValueSeparator => return Err(TokenizeError::UnexpectedToken(t)),
             },
             ParserState::InArrayEmpty => match t {
                 Token::ArrayBegin => {
                     state = ParserState::InArrayEmpty;
-                    stack.push(AST::new_array());
-                }
+                    stack.push(AST::new_array());                }
                 Token::ObjectBegin => {
                     state = ParserState::InObjectEmpty;
                     stack.push(AST::new_object());
                 }
                 Token::False => {
-                    stack.last_mut().ok_or_else(|| internal_error!())?.push(Value::False, None)?;
+                    stack
+                        .last_mut()
+                        .ok_or_else(|| internal_error!())?
+                        .push(Value::False, None)?;
                     state = ParserState::InArrayLastWasValue
                 }
                 Token::True => {
-                    stack.last_mut().ok_or_else(|| internal_error!())?.push(Value::True, None)?;
+                    stack
+                        .last_mut()
+                        .ok_or_else(|| internal_error!())?
+                        .push(Value::True, None)?;
                     state = ParserState::InArrayLastWasValue
                 }
                 Token::Null => {
-                    stack.last_mut().ok_or_else(|| internal_error!())?.push(Value::Null, None)?;
+                    stack
+                        .last_mut()
+                        .ok_or_else(|| internal_error!())?
+                        .push(Value::Null, None)?;
                     state = ParserState::InArrayLastWasValue
                 }
                 Token::String(s) => {
-                    stack.last_mut().ok_or_else(|| internal_error!())?.push(Value::String(s), None)?;
+                    stack
+                        .last_mut()
+                        .ok_or_else(|| internal_error!())?
+                        .push(Value::String(s), None)?;
                     state = ParserState::InArrayLastWasValue
                 }
                 Token::Number(n) => {
-                    stack.last_mut().ok_or_else(|| internal_error!())?.push(Value::Number(n), None)?;
+                    stack
+                        .last_mut()
+                        .ok_or_else(|| internal_error!())?
+                        .push(Value::Number(n), None)?;
                     state = ParserState::InArrayLastWasValue
                 }
                 Token::WhiteSpace => continue,
                 Token::ArrayEnd => array_end(&mut state, &mut stack, &mut key_stack)?,
                 Token::ValueSeparator => return Err(TokenizeError::UnexpectedToken(t)),
-                Token::NameSeparator | Token::ObjectEnd => return Err(TokenizeError::UnexpectedToken(t)),
+                Token::NameSeparator | Token::ObjectEnd => {
+                    return Err(TokenizeError::UnexpectedToken(t))
+                }
             },
             ParserState::InArrayLastWasValue => match t {
                 Token::ValueSeparator => state = ParserState::InArrayLastWasDelim,
@@ -168,35 +206,53 @@ pub(crate) fn parse(input: Vec<Token>) -> Result<Value, TokenizeError> {
             ParserState::InArrayLastWasDelim => match t {
                 Token::ArrayBegin => {
                     state = ParserState::InArrayEmpty;
-                    stack.push(AST::new_array());
-                }
+                    stack.push(AST::new_array());                }
                 Token::ObjectBegin => {
                     state = ParserState::InObjectEmpty;
                     stack.push(AST::new_object());
                 }
                 Token::False => {
-                    stack.last_mut().ok_or_else(|| internal_error!())?.push(Value::False, None)?;
+                    stack
+                        .last_mut()
+                        .ok_or_else(|| internal_error!())?
+                        .push(Value::False, None)?;
                     state = ParserState::InArrayLastWasValue
                 }
                 Token::True => {
-                    stack.last_mut().ok_or_else(|| internal_error!())?.push(Value::True, None)?;
+                    stack
+                        .last_mut()
+                        .ok_or_else(|| internal_error!())?
+                        .push(Value::True, None)?;
                     state = ParserState::InArrayLastWasValue
                 }
                 Token::Null => {
-                    stack.last_mut().ok_or_else(|| internal_error!())?.push(Value::Null, None)?;
+                    stack
+                        .last_mut()
+                        .ok_or_else(|| internal_error!())?
+                        .push(Value::Null, None)?;
                     state = ParserState::InArrayLastWasValue
                 }
                 Token::String(s) => {
-                    stack.last_mut().ok_or_else(|| internal_error!())?.push(Value::String(s), None)?;
+                    stack
+                        .last_mut()
+                        .ok_or_else(|| internal_error!())?
+                        .push(Value::String(s), None)?;
                     state = ParserState::InArrayLastWasValue
                 }
                 Token::Number(n) => {
-                    stack.last_mut().ok_or_else(|| internal_error!())?.push(Value::Number(n), None)?;
+                    stack
+                        .last_mut()
+                        .ok_or_else(|| internal_error!())?
+                        .push(Value::Number(n), None)?;
                     state = ParserState::InArrayLastWasValue
                 }
                 Token::WhiteSpace => continue,
-                Token::ValueSeparator | Token::ArrayEnd => return Err(TokenizeError::UnexpectedToken(t)),
-                Token::NameSeparator | Token::ObjectEnd => return Err(TokenizeError::UnexpectedToken(t)),
+                Token::ValueSeparator | Token::ArrayEnd => {
+                    return Err(TokenizeError::UnexpectedToken(t))
+                }
+                Token::NameSeparator | Token::ObjectEnd => {
+                    return Err(TokenizeError::UnexpectedToken(t))
+                }
             },
             ParserState::InObjectEmpty => match t {
                 Token::String(s) => {
@@ -215,50 +271,53 @@ pub(crate) fn parse(input: Vec<Token>) -> Result<Value, TokenizeError> {
             ParserState::InObjectLastWasNameDelim => match t {
                 Token::ArrayBegin => {
                     state = ParserState::InArrayEmpty;
-                    stack.push(AST::new_array());
-                }
+                    stack.push(AST::new_array());                }
                 Token::ObjectBegin => {
                     state = ParserState::InObjectEmpty;
                     stack.push(AST::new_object());
                 }
                 Token::False => {
-                    stack
-                        .last_mut()
-                        .ok_or_else(|| internal_error!())?
-                        .push(Value::False, Some(key_stack.pop().ok_or_else(|| internal_error!())?))?;
+                    stack.last_mut().ok_or_else(|| internal_error!())?.push(
+                        Value::False,
+                        Some(key_stack.pop().ok_or_else(|| internal_error!())?),
+                    )?;
                     state = ParserState::InObjectLastWasValue
                 }
                 Token::True => {
-                    stack
-                        .last_mut()
-                        .ok_or_else(|| internal_error!())?
-                        .push(Value::True, Some(key_stack.pop().ok_or_else(|| internal_error!())?))?;
+                    stack.last_mut().ok_or_else(|| internal_error!())?.push(
+                        Value::True,
+                        Some(key_stack.pop().ok_or_else(|| internal_error!())?),
+                    )?;
                     state = ParserState::InObjectLastWasValue
                 }
                 Token::Null => {
-                    stack
-                        .last_mut()
-                        .ok_or_else(|| internal_error!())?
-                        .push(Value::Null, Some(key_stack.pop().ok_or_else(|| internal_error!())?))?;
+                    stack.last_mut().ok_or_else(|| internal_error!())?.push(
+                        Value::Null,
+                        Some(key_stack.pop().ok_or_else(|| internal_error!())?),
+                    )?;
                     state = ParserState::InObjectLastWasValue
                 }
                 Token::String(s) => {
-                    stack
-                        .last_mut()
-                        .ok_or_else(|| internal_error!())?
-                        .push(Value::String(s), Some(key_stack.pop().ok_or_else(|| internal_error!())?))?;
+                    stack.last_mut().ok_or_else(|| internal_error!())?.push(
+                        Value::String(s),
+                        Some(key_stack.pop().ok_or_else(|| internal_error!())?),
+                    )?;
                     state = ParserState::InObjectLastWasValue
                 }
                 Token::Number(n) => {
-                    stack
-                        .last_mut()
-                        .ok_or_else(|| internal_error!())?
-                        .push(Value::Number(n), Some(key_stack.pop().ok_or_else(|| internal_error!())?))?;
+                    stack.last_mut().ok_or_else(|| internal_error!())?.push(
+                        Value::Number(n),
+                        Some(key_stack.pop().ok_or_else(|| internal_error!())?),
+                    )?;
                     state = ParserState::InObjectLastWasValue
                 }
                 Token::WhiteSpace => continue,
-                Token::ValueSeparator | Token::ArrayEnd => return Err(TokenizeError::UnexpectedToken(t)),
-                Token::NameSeparator | Token::ObjectEnd => return Err(TokenizeError::UnexpectedToken(t)),
+                Token::ValueSeparator | Token::ArrayEnd => {
+                    return Err(TokenizeError::UnexpectedToken(t))
+                }
+                Token::NameSeparator | Token::ObjectEnd => {
+                    return Err(TokenizeError::UnexpectedToken(t))
+                }
             },
             ParserState::InObjectLastWasValue => match t {
                 Token::ValueSeparator => state = ParserState::InObjectLastWasDelim,
@@ -274,16 +333,15 @@ pub(crate) fn parse(input: Vec<Token>) -> Result<Value, TokenizeError> {
                 Token::WhiteSpace => continue,
                 _ => return Err(TokenizeError::UnexpectedToken(t)),
             },
-            ParserState::End(_) => 
-            match t {
+            ParserState::End(_) => match t {
                 Token::WhiteSpace => match input.next() {
                     Some(_) => return Err(TokenizeError::InputTooLong),
-                    None => break
+                    None => break,
                 },
-                _ => return Err(TokenizeError::InputTooLong)
-            }
+                _ => return Err(TokenizeError::InputTooLong),
+            },
         }
-    };
+    }
 
     if let ParserState::End(v) = state {
         Ok(v)
@@ -298,33 +356,31 @@ mod tests {
 
     #[test]
     fn complete() {
-        let s: Vec<char> = r#"
-        { 
-            "accounting" : [   
-                               { "firstName" : "John",  
+        let mut s= r#"
+        {
+            "accounting" : [
+                               { "firstName" : "John",
                                  "lastName"  : "Doe",
                                  "age"       : 23,
                                  "male"      : true},
-          
-                               { "firstName" : "Mary",  
+
+                               { "firstName" : "Mary",
                                  "lastName"  : "Smith",
                                   "age"      : 32 }
-                           ],                            
-            "sales"      : [ 
-                               { "firstName" : "Sally", 
+                           ],
+            "sales"      : [
+                               { "firstName" : "Sally",
                                  "lastName"  : "Green",
                                   "age"      : 27 ,
                                   "male"      : false},
-          
-                               { "firstName" : "Jim",   
+
+                               { "firstName" : "Jim",
                                  "lastName"  : "Galley",
                                  "age"       : 41 }
-                           ] 
-          } "#.chars().collect();
+                           ]
+          } "#.chars().peekable();
         let mut r = Vec::<Token>::new();
-        let mut pos = 0_usize;
-        while let Ok((Some(t),new_pos)) = crate::lexer::read_token(&s, pos){
-            pos = new_pos;
+        while let Ok(Some(t)) = crate::lexer::read_token(&mut s) {
             r.push(t);
         }
         parse(r).unwrap();

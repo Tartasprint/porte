@@ -47,7 +47,7 @@ macro_rules! internal_error {
 #[cfg(debug_assertions)]
 macro_rules! debug {
     ($expression:expr) => {
-        dbg!($expression)
+        $expression
     };
 }
 

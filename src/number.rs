@@ -16,7 +16,7 @@ impl Number {
     ///
     /// # Example
     /// For encoding: 0.314e1
-    /// ```
+    /// ```ignore
     /// use libporte::number::{*,Digit::*};
     /// let n = Number::new(Sign::Positive,vec![D0],Some(vec![D3,D1,D4]),Some((Sign::Positive,vec![D1])));
     /// ```

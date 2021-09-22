@@ -2,7 +2,7 @@
 
 use crate::{
     err::{internal_error, TokenizeError},
-    idioms::{self, read_one_or_more, Input, ReaderResult},
+    idioms::{self, read_one_or_more, ReaderResult},
     number::{Digit, Number, Sign},
     token::Token,
 };
@@ -12,38 +12,65 @@ const HI_SURROGATE_MAX: u32 = 0xDBFF;
 const LO_SURROGATE_MIN: u32 = 0xDC00;
 const LO_SURROGATE_MAX: u32 = 0xDFFF;
 
-use std::ops::ShlAssign;
+use std::{ops::ShlAssign, str::Chars};
 /// Reads a JSON token.
-pub(crate) fn read_token(input: Input) -> ReaderResult<Option<Token>> {
-    if let Some(c) = input.next() {
+pub(crate) fn read_token<'a, 'b: 'a>(
+    input: &'a mut std::iter::Peekable<Chars<'b>>,
+) -> ReaderResult<Option<Token>> {
+    if let Some(c) = input.peek() {
         match c {
             '0'..='9' | '-' => match read_number(input) {
                 Ok(n) => Ok(Some(Token::Number(n))),
                 Err(e) => Err(e),
             },
-            '"' => match read_string(input) {
-                Ok(s) => Ok(Some(Token::String(s))),
-                Err(e) => Err(e),
-            },
-            '[' => Ok(Some(Token::ArrayBegin)),
-            ']' => Ok(Some(Token::ArrayEnd)),
-            '{' => Ok(Some(Token::ObjectBegin)),
-            '}' => Ok(Some(Token::ObjectEnd)),
+            '"' => {
+                input.next();
+                match read_string(input) {
+                    Ok(s) => Ok(Some(Token::String(s))),
+                    Err(e) => Err(e),
+                }
+            }
+            '[' => {
+                input.next();
+                Ok(Some(Token::ArrayBegin))
+            }
+            ']' => {
+                input.next();
+                Ok(Some(Token::ArrayEnd))
+            }
+            '{' => {
+                input.next();
+                Ok(Some(Token::ObjectBegin))
+            }
+            '}' => {
+                input.next();
+                Ok(Some(Token::ObjectEnd))
+            }
             't' => {
+                input.next();
                 read_rue(input)?;
                 Ok(Some(Token::True))
             }
             'f' => {
+                input.next();
                 read_alse(input)?;
                 Ok(Some(Token::False))
             }
             'n' => {
+                input.next();
                 read_ull(input)?;
                 Ok(Some(Token::Null))
             }
-            ',' => Ok(Some(Token::ValueSeparator)),
-            ':' => Ok(Some(Token::NameSeparator)),
+            ',' => {
+                input.next();
+                Ok(Some(Token::ValueSeparator))
+            }
+            ':' => {
+                input.next();
+                Ok(Some(Token::NameSeparator))
+            }
             ' ' | '\t' | '\x0A' | '\x0D' => {
+                input.next();
                 read_white_space(input)?;
                 Ok(Some(Token::WhiteSpace))
             }
@@ -55,7 +82,7 @@ pub(crate) fn read_token(input: Input) -> ReaderResult<Option<Token>> {
 }
 
 /// Reads a RFC 8259 JSON number;
-fn read_number(input: Input) -> ReaderResult<Number> {
+fn read_number<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<Number> {
     let sign = read_neg_sign(input)?;
     let int = read_int(input)?;
     let frac = read_frac(input)?;
@@ -64,19 +91,49 @@ fn read_number(input: Input) -> ReaderResult<Number> {
 }
 
 /// Reads a decimal digit.
-fn read_digit(input: Input) -> ReaderResult<Digit> {
-    match input.next() {
+fn read_digit<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<Digit> {
+    match input.peek() {
         Some(c) => match c {
-            '0' => Ok(Digit::D0),
-            '1' => Ok(Digit::D1),
-            '2' => Ok(Digit::D2),
-            '3' => Ok(Digit::D3),
-            '4' => Ok(Digit::D4),
-            '5' => Ok(Digit::D5),
-            '6' => Ok(Digit::D6),
-            '7' => Ok(Digit::D7),
-            '8' => Ok(Digit::D8),
-            '9' => Ok(Digit::D9),
+            '0' => {
+                input.next();
+                Ok(Digit::D0)
+            }
+            '1' => {
+                input.next();
+                Ok(Digit::D1)
+            }
+            '2' => {
+                input.next();
+                Ok(Digit::D2)
+            }
+            '3' => {
+                input.next();
+                Ok(Digit::D3)
+            }
+            '4' => {
+                input.next();
+                Ok(Digit::D4)
+            }
+            '5' => {
+                input.next();
+                Ok(Digit::D5)
+            }
+            '6' => {
+                input.next();
+                Ok(Digit::D6)
+            }
+            '7' => {
+                input.next();
+                Ok(Digit::D7)
+            }
+            '8' => {
+                input.next();
+                Ok(Digit::D8)
+            }
+            '9' => {
+                input.next();
+                Ok(Digit::D9)
+            }
             _ => Err(TokenizeError::ExpectedADigit),
         },
         None => Err(TokenizeError::InputEndedEarly),
@@ -84,7 +141,7 @@ fn read_digit(input: Input) -> ReaderResult<Digit> {
 }
 
 /// Reads RFC 8259 JSON white space.
-fn read_white_space(input: Input) -> ReaderResult<()> {
+fn read_white_space<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<()> {
     while let Some(' ' | '\t' | '\x0A' | '\x0D') = input.peek() {
         input.next();
     }
@@ -92,7 +149,7 @@ fn read_white_space(input: Input) -> ReaderResult<()> {
 }
 
 /// Reads the int part of a RFC 8259 JSON number.
-fn read_int(input: Input) -> ReaderResult<Vec<Digit>> {
+fn read_int<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<Vec<Digit>> {
     match read_digit(input) {
         Ok(Digit::D0) => Ok(vec![Digit::D0]),
         Ok(d) => {
@@ -107,29 +164,43 @@ fn read_int(input: Input) -> ReaderResult<Vec<Digit>> {
 }
 
 /// Reads the fractional part of a RFC 8259 JSON number.
-fn read_frac(input: Input) -> ReaderResult<Option<Vec<Digit>>> {
-    if let Some(_) = input.next_if_eq(&'.') {
-        let frac = read_one_or_more(input, read_digit)?;
-        Ok(Some(frac))
+fn read_frac<'a, 'b: 'a>(
+    input: &'a mut std::iter::Peekable<Chars<'b>>,
+) -> ReaderResult<Option<Vec<Digit>>> {
+    if let Some(&c) = input.peek() {
+        if c == '.' {
+            input.next();
+            let frac = read_one_or_more!(input, read_digit)?;
+            Ok(Some(frac))
+        } else {
+            Ok(None)
+        }
     } else {
         Ok(None)
     }
 }
 
 /// Reads the exponential part of a RFC 8259 JSON number.
-fn read_exp(input: Input) -> ReaderResult<Option<(Sign, Vec<Digit>)>> {
+fn read_exp<'a, 'b: 'a>(
+    input: &'a mut std::iter::Peekable<Chars<'b>>,
+) -> ReaderResult<Option<(Sign, Vec<Digit>)>> {
     match input.peek() {
         Some(&'e') | Some(&'E') => {
+            input.next();
             let sign = read_pn_sign(input)?;
-            let exp = read_one_or_more(input, read_digit)?;
+            let exp = read_one_or_more!(input, read_digit)?;
             Ok(Some((sign, exp)))
         }
-        Some(_) | None => Ok(None),
+        Some(&c) => {
+            dbg!(c);
+            Ok(None)
+        }
+        None => Ok(None),
     }
 }
 
 /// Reads an optional negative sign (`'-'`).
-fn read_neg_sign(input: Input) -> ReaderResult<Sign> {
+fn read_neg_sign<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<Sign> {
     match input.peek() {
         Some(&'-') => match input.next() {
             Some(_) => Ok(Sign::Negative),
@@ -140,7 +211,7 @@ fn read_neg_sign(input: Input) -> ReaderResult<Sign> {
 }
 
 /// Reads an optional positive sign (`'+'`) or a negative sign (`'-'`).
-fn read_pn_sign(input: Input) -> ReaderResult<Sign> {
+fn read_pn_sign<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<Sign> {
     match input.peek() {
         Some(&'-') => match input.next() {
             Some(_) => Ok(Sign::Negative),
@@ -150,39 +221,52 @@ fn read_pn_sign(input: Input) -> ReaderResult<Sign> {
             Some(_) => Ok(Sign::Positive),
             None => Err(internal_error!()),
         },
-        Some(_) | None => Ok(Sign::Positive),
+        Some(&c) => {
+            dbg!('y', c);
+            Ok(Sign::Positive)
+        }
+        None => Ok(Sign::Positive),
     }
 }
 
 /// Reads RFC8259 JSON string.
-fn read_string(input: Input) -> ReaderResult<String> {
+fn read_string<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<String> {
     let mut a = String::new();
-    while let Some(c) = input.next() {
+    while let Some(&c) = input.peek() {
         match c {
             '\u{0000}'..='\u{001F}' => return Err(TokenizeError::ControlCharacterUnescaped),
-            '\\' => match read_escape_sequence(input) {
-                Ok(r) => a.push(r),
-                Err(e) => return Err(e),
-            },
-            '"' => return Ok(a),
-            _ => a.push(c),
+            '\\' => {
+                input.next();
+                match read_escape_sequence(input) {
+                    Ok(r) => a.push(r),
+                    Err(e) => return Err(e),
+                }
+            }
+            '"' => {
+                input.next();
+                return Ok(a);
+            }
+            _ => {
+                input.next();
+                a.push(c)
+            }
         }
     }
     Err(TokenizeError::InputEndedEarly)
 }
 
 /// Reads a "rue" (ending of "true").
-fn read_rue(input: Input) -> ReaderResult<()> {
+fn read_rue<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<()> {
     idioms::read_string(input, "rue")
 }
 
 /// Reads a "false" (ending of "false").
-fn read_alse(input: Input) -> ReaderResult<()> {
+fn read_alse<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<()> {
     idioms::read_string(input, "alse")
 }
 
 /// Reads a "ull" (ending of "null").
-fn read_ull(input: Input) -> ReaderResult<()> {
+fn read_ull<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<()> {
     idioms::read_string(input, "ull")
 }
 
@@ -200,7 +284,9 @@ fn read_ull(input: Input) -> ReaderResult<()> {
 /// | %x72         | r    | carriage return| U+000D |
 /// | %x74         | t    | tab            | U+0009 |
 /// | %x75 4HEXDIG | uXXXX|                | U+XXXX |
-fn read_escape_sequence(input: Input) -> ReaderResult<char> {
+fn read_escape_sequence<'a, 'b: 'a>(
+    input: &'a mut std::iter::Peekable<Chars<'b>>,
+) -> ReaderResult<char> {
     if let Some(c) = input.next() {
         match c {
             '"' => Ok('"'),
@@ -267,14 +353,14 @@ fn read_escape_sequence(input: Input) -> ReaderResult<char> {
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// use libporte::lexer::read_hexdigit;
 ///
 /// mut let s: Vec<char> = "2".chars().peekable();
 /// let r = read_hexdigitmut (&);
 /// assert_eq!(Ok((2u8, 1)), r);
 /// ```
-fn read_hexdigit(input: Input) -> ReaderResult<u8> {
+fn read_hexdigit<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<u8> {
     match input.next() {
         Some(c) => match c {
             '0'..='9' => Ok(c as u8 - b'0'),
@@ -299,12 +385,6 @@ mod tests {
                     #[test]
                     fn empty_input(){
                         let mut s = "".chars().peekable();
-                        let r = $func_name(&mut s);
-                        assert_eq!(Err(TokenizeError::InputEndedEarly), r);
-                        let mut s = "".chars().peekable();
-                        let r = $func_name(&mut s);
-                        assert_eq!(Err(TokenizeError::InputEndedEarly), r);
-                        let mut s = "01234".chars().peekable();
                         let r = $func_name(&mut s);
                         assert_eq!(Err(TokenizeError::InputEndedEarly), r);
                     }
@@ -521,8 +601,6 @@ mod tests {
         fn update_position() {
             let mut s = "u0000\"\\bfnrtu0000".chars().peekable();
             let r = read_escape_sequence(&mut s);
-            assert_eq!(Err(TokenizeError::InputEndedEarly), r);
-            let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\0'), r);
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('"'), r);
@@ -561,11 +639,13 @@ mod tests {
         #[test]
         fn simple_strings() {
             let a = "Hey I'm James, how are you ?".to_string();
-            let mut s = (a.clone() + "\"").chars().peekable();
+            let s = a.clone() + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok(a.clone()), r);
             let a = "I'm quite bored writing tests. &\u{e9}'(-\u{e8}__\u{e7})=$\u{f9}*".to_string();
-            let mut s = (a.clone() + "\"").chars().peekable();
+            let s = a.clone() + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok(a.clone()), r);
         }
@@ -573,24 +653,29 @@ mod tests {
         #[test]
         fn u0000_through_u001f_are_invalid() {
             let a = "Hey I'm James, how are you ?\0".to_string();
-            let mut s = (a + "\"").chars().peekable();
+            let s = a + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Err(TokenizeError::ControlCharacterUnescaped), r);
             let a = "Hey I'm James,\u{1} how are you ?".to_string();
-            let mut s = (a + "\"").chars().peekable();
+            let s = a + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Err(TokenizeError::ControlCharacterUnescaped), r);
             let a = "\u{17}Hey I'm James, how are you ?".to_string();
-            let mut s = (a + "\"").chars().peekable();
+            let s = a + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Err(TokenizeError::ControlCharacterUnescaped), r);
             let a = "\tHey I'm James, how are you ?".to_string();
-            let mut s = (a + "\"").chars().peekable();
+            let s = a + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Err(TokenizeError::ControlCharacterUnescaped), r);
             // Other control characters (such as DEL) are valid according to RFC8259
             let a = "\u{7F}Hey I'm James, how are you ?".to_string();
-            let mut s = (a.clone() + "\"").chars().peekable();
+            let s = a.clone() + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok(a.clone()), r);
         }
@@ -598,19 +683,23 @@ mod tests {
         #[test]
         fn some_characters_must_escaped() {
             let a = "Hey I'm \"James\", how are you ?".to_string();
-            let mut s = (a + "\"").chars().peekable();
+            let s = a + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok("Hey I'm ".to_string()), r);
             let a = "Hey I'm \\\"James\\\", how are you ?".to_string();
-            let mut s = (a.clone() + "\"").chars().peekable();
+            let s = a.clone() + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok("Hey I'm \"James\", how are you ?".to_string()), r);
             let a = "Hey I'm \\/James/\\, how are you ?".to_string();
-            let mut s = (a + "\"").chars().peekable();
+            let s = a + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Err(TokenizeError::UnkownEscapeSequence), r);
             let a = "Hey I'm \\\\/James/\\\\, how are you ?".to_string();
-            let mut s = (a.clone() + "\"").chars().peekable();
+            let s = a.clone() + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok("Hey I'm \\/James/\\, how are you ?".to_string()), r);
         }
@@ -626,7 +715,8 @@ mod tests {
         #[test]
         fn string_with_escape_sequence() {
             let a = "\\t\\tSome \\\"centered\\\" line\\t\\t\\r\\n".to_string();
-            let mut s = (a.clone() + "\"").chars().peekable();
+            let s = a.clone() + "\"";
+            let mut s = s.chars().peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok("\t\tSome \"centered\" line\t\t\r\n".to_string()), r);
         }
@@ -636,9 +726,17 @@ mod tests {
             let pre = "{\"".to_string();
             let post = "\": 3}";
             let a = "\\t\\tSome \\\"centered\\\" line\\t\\t\\r\\n".to_string();
-            let s = (pre.clone() + &a + post).chars().peekable();
+            let s = pre.clone() + &a + post;
+            let mut s = s.chars().peekable();
+            // String starts at the second character but our function begins after
+            // the quote, so take two items.
+            s.next();
+            s.next();
             let r = read_string(&mut s);
             assert_eq!(Ok("\t\tSome \"centered\" line\t\t\r\n".to_string()), r);
+            let s: Vec<char> = s.collect();
+            let end: Vec<char> = post.chars().skip(1usize).collect();
+            assert_eq!(s, end)
         }
     }
     mod read_number {
@@ -651,7 +749,7 @@ mod tests {
         #[test]
         fn some_positive_int() {
             let mut a = "123".chars().peekable();
-            let mut n = Number {
+            let n = Number {
                 sign: Sign::Positive,
                 int: vec![D1, D2, D3],
                 frac: None,
@@ -659,7 +757,7 @@ mod tests {
             };
             assert_eq!(Ok(n), read_number(&mut a));
             let mut a = "1789654320".chars().peekable();
-            let mut n = Number {
+            let n = Number {
                 sign: Sign::Positive,
                 int: vec![D1, D7, D8, D9, D6, D5, D4, D3, D2, D0],
                 frac: None,
@@ -671,7 +769,7 @@ mod tests {
         #[test]
         fn some_negative_int() {
             let mut a = "-103".chars().peekable();
-            let mut n = Number {
+            let n = Number {
                 sign: Sign::Negative,
                 int: vec![D1, D0, D3],
                 frac: None,
@@ -679,7 +777,7 @@ mod tests {
             };
             assert_eq!(Ok(n), read_number(&mut a));
             let mut a = "-1789654320".chars().peekable();
-            let mut n = Number {
+            let n = Number {
                 sign: Sign::Negative,
                 int: vec![D1, D7, D8, D9, D6, D5, D4, D3, D2, D0],
                 frac: None,
@@ -699,7 +797,7 @@ mod tests {
         #[test]
         fn leading_zero() {
             let mut a = "0123".chars().peekable();
-            let mut n = Number {
+            let n = Number {
                 sign: Sign::Positive,
                 int: vec![D0],
                 frac: None,
@@ -707,7 +805,7 @@ mod tests {
             };
             assert_eq!(Ok(n), read_number(&mut a));
             let mut a = "-01789654320".chars().peekable();
-            let mut n = Number {
+            let n = Number {
                 sign: Sign::Negative,
                 int: vec![D0],
                 frac: None,
@@ -719,7 +817,7 @@ mod tests {
         #[test]
         fn with_fraction() {
             let mut a = "3.141592653589793".chars().peekable();
-            let mut n = Number {
+            let n = Number {
                 sign: Sign::Positive,
                 int: vec![D3],
                 frac: Some(vec![
@@ -729,7 +827,7 @@ mod tests {
             };
             assert_eq!(Ok(n), read_number(&mut a));
             let mut a = "-0.5".chars().peekable();
-            let mut n = Number {
+            let n = Number {
                 sign: Sign::Negative,
                 int: vec![D0],
                 frac: Some(vec![D5]),
@@ -740,8 +838,8 @@ mod tests {
 
         #[test]
         fn with_lower_case_exp() {
-            let mut a = "6022E20".chars().peekable();
-            let mut n = Number {
+            let mut a = "6022e20".chars().peekable();
+            let n = Number {
                 sign: Sign::Positive,
                 int: vec![D6, D0, D2, D2],
                 frac: None,
@@ -755,8 +853,8 @@ mod tests {
 
         #[test]
         fn with_upper_case_exp() {
-            let mut a = "1602e-22".chars().peekable();
-            let mut n = Number {
+            let mut a = "1602E-22".chars().peekable();
+            let n = Number {
                 sign: Sign::Positive,
                 int: vec![D1, D6, D0, D2],
                 frac: None,
@@ -771,7 +869,7 @@ mod tests {
         #[test]
         fn sign_frac_exp() {
             let mut a = "6.022E+22".chars().peekable();
-            let mut n = Number {
+            let n = Number {
                 sign: Sign::Positive,
                 int: vec![D6],
                 frac: Some(vec![D0, D2, D2]),
@@ -782,7 +880,7 @@ mod tests {
             };
             assert_eq!(Ok(n), read_number(&mut a));
             let mut a = "-1.602e-19".chars().peekable();
-            let mut n = Number {
+            let n = Number {
                 sign: Sign::Negative,
                 int: vec![D1],
                 frac: Some(vec![D6, D0, D2]),
@@ -808,6 +906,17 @@ mod tests {
             assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut a));
             let mut a = "MDCCLXXXIX".chars().peekable();
             assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut a));
+        }
+    }
+
+    mod read_white_space {
+        use super::super::read_white_space;
+        #[test]
+        fn read_just_what_needed() {
+            let mut s = "    a".chars().peekable();
+            let _ = read_white_space(&mut s);
+            let s: Vec<char> = s.collect();
+            assert_eq!(s, vec!['a']);
         }
     }
 
