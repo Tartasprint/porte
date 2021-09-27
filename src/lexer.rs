@@ -5,17 +5,37 @@ use crate::{
     idioms::{self, read_one_or_more, ReaderResult},
     number::{Digit, Number, Sign},
     token::Token,
+    chars::Chars
 };
+use std::{ops::ShlAssign};
+pub(crate) struct Lexer<'a> {
+    input: &'a mut std::iter::Peekable<Chars>,
+}
+
+impl<'a> Lexer<'a> {
+    pub(crate) fn new(input: &'a mut std::iter::Peekable<Chars>) -> Self {
+        Self {
+            input,
+        }
+    }
+}
+
+impl Iterator for Lexer<'_> {
+    type Item = ReaderResult<Token>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        read_token(self.input).transpose()
+    }
+}
 
 const HI_SURROGATE_MIN: u32 = 0xD800;
 const HI_SURROGATE_MAX: u32 = 0xDBFF;
 const LO_SURROGATE_MIN: u32 = 0xDC00;
 const LO_SURROGATE_MAX: u32 = 0xDFFF;
 
-use std::{ops::ShlAssign, str::Chars};
 /// Reads a JSON token.
-pub(crate) fn read_token<'a, 'b: 'a>(
-    input: &'a mut std::iter::Peekable<Chars<'b>>,
+pub(crate) fn read_token<'a>(
+    input: &'a mut std::iter::Peekable<Chars>,
 ) -> ReaderResult<Option<Token>> {
     if let Some(c) = input.peek() {
         match c {
@@ -82,7 +102,7 @@ pub(crate) fn read_token<'a, 'b: 'a>(
 }
 
 /// Reads a RFC 8259 JSON number;
-fn read_number<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<Number> {
+fn read_number<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Number> {
     let sign = read_neg_sign(input)?;
     let int = read_int(input)?;
     let frac = read_frac(input)?;
@@ -91,7 +111,7 @@ fn read_number<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> Rea
 }
 
 /// Reads a decimal digit.
-fn read_digit<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<Digit> {
+fn read_digit<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Digit> {
     match input.peek() {
         Some(c) => match c {
             '0' => {
@@ -141,7 +161,7 @@ fn read_digit<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> Read
 }
 
 /// Reads RFC 8259 JSON white space.
-fn read_white_space<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<()> {
+fn read_white_space<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
     while let Some(' ' | '\t' | '\x0A' | '\x0D') = input.peek() {
         input.next();
     }
@@ -149,7 +169,7 @@ fn read_white_space<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -
 }
 
 /// Reads the int part of a RFC 8259 JSON number.
-fn read_int<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<Vec<Digit>> {
+fn read_int<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Vec<Digit>> {
     match read_digit(input) {
         Ok(Digit::D0) => Ok(vec![Digit::D0]),
         Ok(d) => {
@@ -164,8 +184,8 @@ fn read_int<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> Reader
 }
 
 /// Reads the fractional part of a RFC 8259 JSON number.
-fn read_frac<'a, 'b: 'a>(
-    input: &'a mut std::iter::Peekable<Chars<'b>>,
+fn read_frac<'a>(
+    input: &'a mut std::iter::Peekable<Chars>,
 ) -> ReaderResult<Option<Vec<Digit>>> {
     if let Some(&c) = input.peek() {
         if c == '.' {
@@ -181,8 +201,8 @@ fn read_frac<'a, 'b: 'a>(
 }
 
 /// Reads the exponential part of a RFC 8259 JSON number.
-fn read_exp<'a, 'b: 'a>(
-    input: &'a mut std::iter::Peekable<Chars<'b>>,
+fn read_exp<'a>(
+    input: &'a mut std::iter::Peekable<Chars>,
 ) -> ReaderResult<Option<(Sign, Vec<Digit>)>> {
     match input.peek() {
         Some(&'e') | Some(&'E') => {
@@ -200,7 +220,7 @@ fn read_exp<'a, 'b: 'a>(
 }
 
 /// Reads an optional negative sign (`'-'`).
-fn read_neg_sign<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<Sign> {
+fn read_neg_sign<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sign> {
     match input.peek() {
         Some(&'-') => match input.next() {
             Some(_) => Ok(Sign::Negative),
@@ -211,7 +231,7 @@ fn read_neg_sign<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> R
 }
 
 /// Reads an optional positive sign (`'+'`) or a negative sign (`'-'`).
-fn read_pn_sign<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<Sign> {
+fn read_pn_sign<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sign> {
     match input.peek() {
         Some(&'-') => match input.next() {
             Some(_) => Ok(Sign::Negative),
@@ -230,7 +250,7 @@ fn read_pn_sign<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> Re
 }
 
 /// Reads RFC8259 JSON string.
-fn read_string<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<String> {
+fn read_string<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<String> {
     let mut a = String::new();
     while let Some(&c) = input.peek() {
         match c {
@@ -256,17 +276,17 @@ fn read_string<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> Rea
 }
 
 /// Reads a "rue" (ending of "true").
-fn read_rue<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<()> {
+fn read_rue<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
     idioms::read_string(input, "rue")
 }
 
 /// Reads a "false" (ending of "false").
-fn read_alse<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<()> {
+fn read_alse<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
     idioms::read_string(input, "alse")
 }
 
 /// Reads a "ull" (ending of "null").
-fn read_ull<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<()> {
+fn read_ull<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
     idioms::read_string(input, "ull")
 }
 
@@ -284,8 +304,8 @@ fn read_ull<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> Reader
 /// | %x72         | r    | carriage return| U+000D |
 /// | %x74         | t    | tab            | U+0009 |
 /// | %x75 4HEXDIG | uXXXX|                | U+XXXX |
-fn read_escape_sequence<'a, 'b: 'a>(
-    input: &'a mut std::iter::Peekable<Chars<'b>>,
+fn read_escape_sequence<'a>(
+    input: &'a mut std::iter::Peekable<Chars>,
 ) -> ReaderResult<char> {
     if let Some(c) = input.next() {
         match c {
@@ -356,11 +376,12 @@ fn read_escape_sequence<'a, 'b: 'a>(
 /// ```ignore
 /// use libporte::lexer::read_hexdigit;
 ///
-/// mut let s: Vec<char> = "2".chars().peekable();
+/// mut let s: Vec<char> = "2";
+/// let mut s = Chars::from(s).peekable();
 /// let r = read_hexdigitmut (&);
 /// assert_eq!(Ok((2u8, 1)), r);
 /// ```
-fn read_hexdigit<'a, 'b: 'a>(input: &'a mut std::iter::Peekable<Chars<'b>>) -> ReaderResult<u8> {
+fn read_hexdigit<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<u8> {
     match input.next() {
         Some(c) => match c {
             '0'..='9' => Ok(c as u8 - b'0'),
@@ -381,10 +402,11 @@ mod tests {
             $(
                 mod reader_interface {
                     use super::$func_name;
-                    use crate::err::TokenizeError;
+                    use crate::{chars::Chars,err::TokenizeError};
                     #[test]
                     fn empty_input(){
-                        let mut s = "".chars().peekable();
+                        let s = "";
+                        let mut s = Chars::from(s).peekable();
                         let r = $func_name(&mut s);
                         assert_eq!(Err(TokenizeError::InputEndedEarly), r);
                     }
@@ -394,7 +416,7 @@ mod tests {
     }
 
     mod read_hexdigit {
-        use crate::err::TokenizeError;
+        use crate::{chars::Chars,err::TokenizeError};
 
         use super::super::read_hexdigit;
 
@@ -402,165 +424,209 @@ mod tests {
 
         #[test]
         fn digits() {
-            let mut s = "0".chars().peekable();
+            let s = "0";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(0_u8), r);
-            let mut s = "1".chars().peekable();
+            let s = "1";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(1_u8), r);
-            let mut s = "2".chars().peekable();
+            let s = "2";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(2_u8), r);
-            let mut s = "3".chars().peekable();
+            let s = "3";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(3_u8), r);
-            let mut s = "4".chars().peekable();
+            let s = "4";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(4_u8), r);
-            let mut s = "5".chars().peekable();
+            let s = "5";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(5_u8), r);
-            let mut s = "6".chars().peekable();
+            let s = "6";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(6_u8), r);
-            let mut s = "7".chars().peekable();
+            let s = "7";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(7_u8), r);
-            let mut s = "8".chars().peekable();
+            let s = "8";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(8_u8), r);
-            let mut s = "9".chars().peekable();
+            let s = "9";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(9_u8), r);
         }
 
         #[test]
         fn lower_case() {
-            let mut s = "a".chars().peekable();
+            let s = "a";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(10_u8), r);
-            let mut s = "b".chars().peekable();
+            let s = "b";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(11_u8), r);
-            let mut s = "c".chars().peekable();
+            let s = "c";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(12_u8), r);
-            let mut s = "d".chars().peekable();
+            let s = "d";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(13_u8), r);
-            let mut s = "e".chars().peekable();
+            let s = "e";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(14_u8), r);
-            let mut s = "f".chars().peekable();
+            let s = "f";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(15_u8), r);
         }
 
         #[test]
         fn upper_case() {
-            let mut s = "A".chars().peekable();
+            let s = "A";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(10_u8), r);
-            let mut s = "B".chars().peekable();
+            let s = "B";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(11_u8), r);
-            let mut s = "C".chars().peekable();
+            let s = "C";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(12_u8), r);
-            let mut s = "D".chars().peekable();
+            let s = "D";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(13_u8), r);
-            let mut s = "E".chars().peekable();
+            let s = "E";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(14_u8), r);
-            let mut s = "F".chars().peekable();
+            let s = "F";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Ok(15_u8), r);
         }
 
         #[test]
         fn invalid() {
-            let mut s = "z".chars().peekable();
+            let s = "z";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Err(TokenizeError::ExpectedAHexdigit), r);
-            let mut s = "@".chars().peekable();
+            let s = "@";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Err(TokenizeError::ExpectedAHexdigit), r);
-            let mut s = "One".chars().peekable();
+            let s = "One";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Err(TokenizeError::ExpectedAHexdigit), r);
-            let mut s = "|ab".chars().peekable();
+            let s = "|ab";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Err(TokenizeError::ExpectedAHexdigit), r);
-            let mut s = "\0".chars().peekable();
+            let s = "\0";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Err(TokenizeError::ExpectedAHexdigit), r);
-            let mut s = "\t".chars().peekable();
+            let s = "\t";
+            let mut s = Chars::from(s).peekable();
             let r = read_hexdigit(&mut s);
             assert_eq!(Err(TokenizeError::ExpectedAHexdigit), r);
         }
     }
     mod read_escape_sequence {
         use super::super::read_escape_sequence;
-        use crate::err::TokenizeError;
+        use crate::{chars::Chars,err::TokenizeError};
         test_read_x! {read_escape_sequence}
 
         #[test]
         fn valid_single_chars() {
-            let mut s = "\"".chars().peekable();
+            let s = "\"";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('"'), r);
-            let mut s = "\\".chars().peekable();
+            let s = "\\";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\\'), r);
-            let mut s = "/".chars().peekable();
+            let s = "/";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('/'), r);
-            let mut s = "b".chars().peekable();
+            let s = "b";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\u{0008}'), r);
-            let mut s = "f".chars().peekable();
+            let s = "f";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\u{000C}'), r);
-            let mut s = "n".chars().peekable();
+            let s = "n";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\n'), r);
-            let mut s = "r".chars().peekable();
+            let s = "r";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\r'), r);
-            let mut s = "t".chars().peekable();
+            let s = "t";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\t'), r);
         }
 
         #[test]
         fn invalid_single_chars() {
-            let mut s = " ".chars().peekable();
+            let s = " ";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Err(TokenizeError::UnkownEscapeSequence), r);
-            let mut s = "1".chars().peekable();
+            let s = "1";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Err(TokenizeError::UnkownEscapeSequence), r);
-            let mut s = "a".chars().peekable();
+            let s = "a";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Err(TokenizeError::UnkownEscapeSequence), r);
-            let mut s = "\n".chars().peekable();
+            let s = "\n";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Err(TokenizeError::UnkownEscapeSequence), r);
         }
 
         #[test]
         fn valid_unicode_escape() {
-            let mut s = "u0020".chars().peekable();
+            let s = "u0020";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok(' '), r);
-            let mut s = "u0061".chars().peekable();
+            let s = "u0061";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('a'), r);
-            let mut s = "uABCD".chars().peekable();
+            let s = "uABCD";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\u{ABCD}'), r);
-            let mut s = "uD057".chars().peekable();
+            let s = "uD057";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\u{D057}'), r);
         }
@@ -573,33 +639,40 @@ mod tests {
 
         #[test]
         fn unicode_invalid_too_short() {
-            let mut s = "u0".chars().peekable();
+            let s = "u0";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Err(TokenizeError::InputEndedEarly), r);
-            let mut s = "u0 some garbage after the escape".chars().peekable();
+            let s = "u0 some garbage after the escape";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Err(TokenizeError::ExpectedAHexdigit), r);
-            let mut s = "u".chars().peekable();
+            let s = "u";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Err(TokenizeError::InputEndedEarly), r);
-            let mut s = "uFF".chars().peekable();
+            let s = "uFF";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Err(TokenizeError::InputEndedEarly), r);
         }
 
         #[test]
         fn unicode_is_exactly_4hexdigits() {
-            let mut s = "u00001".chars().peekable();
+            let s = "u00001";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\0'), r);
-            let mut s = "u000AFE".chars().peekable();
+            let s = "u000AFE";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\u{000A}'), r);
         }
 
         #[test]
         fn update_position() {
-            let mut s = "u0000\"\\bfnrtu0000".chars().peekable();
+            let s = "u0000\"\\bfnrtu0000";
+            let mut s = Chars::from(s).peekable();
             let r = read_escape_sequence(&mut s);
             assert_eq!(Ok('\0'), r);
             let r = read_escape_sequence(&mut s);
@@ -622,16 +695,18 @@ mod tests {
     }
     mod read_string {
         use super::super::read_string;
-        use crate::err::TokenizeError;
+        use crate::{chars::Chars,err::TokenizeError};
 
         test_read_x! {read_string}
 
         #[test]
         fn empty_string() {
-            let mut s = "\"".chars().peekable();
+            let s = "\"";
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok("".to_owned()), r);
-            let mut s = "\"should have already stopped".chars().peekable();
+            let s = "\"should have already stopped";
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok("".to_owned()), r);
         }
@@ -640,12 +715,12 @@ mod tests {
         fn simple_strings() {
             let a = "Hey I'm James, how are you ?".to_string();
             let s = a.clone() + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok(a.clone()), r);
             let a = "I'm quite bored writing tests. &\u{e9}'(-\u{e8}__\u{e7})=$\u{f9}*".to_string();
             let s = a.clone() + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok(a.clone()), r);
         }
@@ -654,28 +729,28 @@ mod tests {
         fn u0000_through_u001f_are_invalid() {
             let a = "Hey I'm James, how are you ?\0".to_string();
             let s = a + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Err(TokenizeError::ControlCharacterUnescaped), r);
             let a = "Hey I'm James,\u{1} how are you ?".to_string();
             let s = a + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Err(TokenizeError::ControlCharacterUnescaped), r);
             let a = "\u{17}Hey I'm James, how are you ?".to_string();
             let s = a + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Err(TokenizeError::ControlCharacterUnescaped), r);
             let a = "\tHey I'm James, how are you ?".to_string();
             let s = a + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Err(TokenizeError::ControlCharacterUnescaped), r);
             // Other control characters (such as DEL) are valid according to RFC8259
             let a = "\u{7F}Hey I'm James, how are you ?".to_string();
             let s = a.clone() + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok(a.clone()), r);
         }
@@ -684,30 +759,30 @@ mod tests {
         fn some_characters_must_escaped() {
             let a = "Hey I'm \"James\", how are you ?".to_string();
             let s = a + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok("Hey I'm ".to_string()), r);
             let a = "Hey I'm \\\"James\\\", how are you ?".to_string();
             let s = a.clone() + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok("Hey I'm \"James\", how are you ?".to_string()), r);
             let a = "Hey I'm \\/James/\\, how are you ?".to_string();
             let s = a + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Err(TokenizeError::UnkownEscapeSequence), r);
             let a = "Hey I'm \\\\/James/\\\\, how are you ?".to_string();
             let s = a.clone() + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok("Hey I'm \\/James/\\, how are you ?".to_string()), r);
         }
 
         #[test]
         fn string_must_be_closed_by_quote() {
-            let a = "Hey I'm James, how are you ?".to_string();
-            let mut s = a.chars().peekable();
+            let s = "Hey I'm James, how are you ?".to_string();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Err(TokenizeError::InputEndedEarly), r);
         }
@@ -716,7 +791,7 @@ mod tests {
         fn string_with_escape_sequence() {
             let a = "\\t\\tSome \\\"centered\\\" line\\t\\t\\r\\n".to_string();
             let s = a.clone() + "\"";
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             let r = read_string(&mut s);
             assert_eq!(Ok("\t\tSome \"centered\" line\t\t\r\n".to_string()), r);
         }
@@ -727,7 +802,7 @@ mod tests {
             let post = "\": 3}";
             let a = "\\t\\tSome \\\"centered\\\" line\\t\\t\\r\\n".to_string();
             let s = pre.clone() + &a + post;
-            let mut s = s.chars().peekable();
+            let mut s = Chars::from(s).peekable();
             // String starts at the second character but our function begins after
             // the quote, so take two items.
             s.next();
@@ -743,80 +818,89 @@ mod tests {
         use std::vec;
 
         use super::super::read_number;
-        use crate::err::TokenizeError;
+        use crate::{chars::Chars,err::TokenizeError};
         use crate::number::Digit::{D0, D1, D2, D3, D4, D5, D6, D7, D8, D9};
         use crate::number::{Exp, Number, Sign};
         #[test]
         fn some_positive_int() {
-            let mut a = "123".chars().peekable();
+            let s = "123";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Positive,
                 int: vec![D1, D2, D3],
                 frac: None,
                 exp: None,
             };
-            assert_eq!(Ok(n), read_number(&mut a));
-            let mut a = "1789654320".chars().peekable();
+            assert_eq!(Ok(n), read_number(&mut s));
+            let s = "1789654320";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Positive,
                 int: vec![D1, D7, D8, D9, D6, D5, D4, D3, D2, D0],
                 frac: None,
                 exp: None,
             };
-            assert_eq!(Ok(n), read_number(&mut a));
+            assert_eq!(Ok(n), read_number(&mut s));
         }
 
         #[test]
         fn some_negative_int() {
-            let mut a = "-103".chars().peekable();
+            let s = "-103";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Negative,
                 int: vec![D1, D0, D3],
                 frac: None,
                 exp: None,
             };
-            assert_eq!(Ok(n), read_number(&mut a));
-            let mut a = "-1789654320".chars().peekable();
+            assert_eq!(Ok(n), read_number(&mut s));
+            let s = "-1789654320";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Negative,
                 int: vec![D1, D7, D8, D9, D6, D5, D4, D3, D2, D0],
                 frac: None,
                 exp: None,
             };
-            assert_eq!(Ok(n), read_number(&mut a));
+            assert_eq!(Ok(n), read_number(&mut s));
         }
 
         #[test]
         fn some_invalid_positive_int() {
-            let mut a = "+123".chars().peekable();
-            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut a));
-            let mut a = "+1789654320".chars().peekable();
-            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut a));
+            let s = "+123";
+            let mut s = Chars::from(s).peekable();
+            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut s));
+            let s = "+1789654320";
+            let mut s = Chars::from(s).peekable();
+            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut s));
         }
 
         #[test]
         fn leading_zero() {
-            let mut a = "0123".chars().peekable();
+            let s = "0123";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Positive,
                 int: vec![D0],
                 frac: None,
                 exp: None,
             };
-            assert_eq!(Ok(n), read_number(&mut a));
-            let mut a = "-01789654320".chars().peekable();
+            assert_eq!(Ok(n), read_number(&mut s));
+            let s = "-01789654320";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Negative,
                 int: vec![D0],
                 frac: None,
                 exp: None,
             };
-            assert_eq!(Ok(n), read_number(&mut a));
+            assert_eq!(Ok(n), read_number(&mut s));
         }
 
         #[test]
         fn with_fraction() {
-            let mut a = "3.141592653589793".chars().peekable();
+            let s = "3.141592653589793";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Positive,
                 int: vec![D3],
@@ -825,20 +909,22 @@ mod tests {
                 ]),
                 exp: None,
             };
-            assert_eq!(Ok(n), read_number(&mut a));
-            let mut a = "-0.5".chars().peekable();
+            assert_eq!(Ok(n), read_number(&mut s));
+            let s = "-0.5";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Negative,
                 int: vec![D0],
                 frac: Some(vec![D5]),
                 exp: None,
             };
-            assert_eq!(Ok(n), read_number(&mut a));
+            assert_eq!(Ok(n), read_number(&mut s));
         }
 
         #[test]
         fn with_lower_case_exp() {
-            let mut a = "6022e20".chars().peekable();
+            let s = "6022e20";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Positive,
                 int: vec![D6, D0, D2, D2],
@@ -848,12 +934,13 @@ mod tests {
                     v: vec![D2, D0],
                 }),
             };
-            assert_eq!(Ok(n), read_number(&mut a));
+            assert_eq!(Ok(n), read_number(&mut s));
         }
 
         #[test]
         fn with_upper_case_exp() {
-            let mut a = "1602E-22".chars().peekable();
+            let s = "1602E-22";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Positive,
                 int: vec![D1, D6, D0, D2],
@@ -863,12 +950,13 @@ mod tests {
                     v: vec![D2, D2],
                 }),
             };
-            assert_eq!(Ok(n), read_number(&mut a));
+            assert_eq!(Ok(n), read_number(&mut s));
         }
 
         #[test]
         fn sign_frac_exp() {
-            let mut a = "6.022E+22".chars().peekable();
+            let s = "6.022E+22";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Positive,
                 int: vec![D6],
@@ -878,8 +966,9 @@ mod tests {
                     v: vec![D2, D2],
                 }),
             };
-            assert_eq!(Ok(n), read_number(&mut a));
-            let mut a = "-1.602e-19".chars().peekable();
+            assert_eq!(Ok(n), read_number(&mut s));
+            let s = "-1.602e-19";
+            let mut s = Chars::from(s).peekable();
             let n = Number {
                 sign: Sign::Negative,
                 int: vec![D1],
@@ -889,31 +978,40 @@ mod tests {
                     v: vec![D1, D9],
                 }),
             };
-            assert_eq!(Ok(n), read_number(&mut a));
+            assert_eq!(Ok(n), read_number(&mut s));
         }
 
         #[test]
         fn invalid_inputs() {
-            let mut a = "d23f".chars().peekable();
-            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut a));
-            let mut a = "NaN".chars().peekable();
-            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut a));
-            let mut a = "Infinity".chars().peekable();
-            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut a));
-            let mut a = "three".chars().peekable();
-            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut a));
-            let mut a = "e".chars().peekable();
-            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut a));
-            let mut a = "MDCCLXXXIX".chars().peekable();
-            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut a));
+            let s = "d23f";
+            let mut s = Chars::from(s).peekable();
+            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut s));
+            let s = "NaN";
+            let mut s = Chars::from(s).peekable();
+            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut s));
+            let s = "Infinity";
+            let mut s = Chars::from(s).peekable();
+            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut s));
+            let s = "three";
+            let mut s = Chars::from(s).peekable();
+            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut s));
+            let s = "e";
+            let mut s = Chars::from(s).peekable();
+            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut s));
+            let s = "MDCCLXXXIX";
+            let mut s = Chars::from(s).peekable();
+            assert_eq!(Err(TokenizeError::ExpectedADigit), read_number(&mut s));
         }
     }
 
     mod read_white_space {
+        use crate::chars::Chars;
+
         use super::super::read_white_space;
         #[test]
         fn read_just_what_needed() {
-            let mut s = "    a".chars().peekable();
+            let s = "    a";
+            let mut s = Chars::from(s).peekable();
             let _ = read_white_space(&mut s);
             let s: Vec<char> = s.collect();
             assert_eq!(s, vec!['a']);
@@ -923,7 +1021,8 @@ mod tests {
     #[should_panic]
     #[test]
     fn complete_test() {
-        let mut s = "{\"asd\": { \"sdf\" : [123, 3.14]}}".chars().peekable();
+        let s = "{\"asd\": { \"sdf\" : [123, 3.14]}}";
+        let mut s = Chars::from(s).peekable();
         let mut r = Vec::<Token>::new();
         while let Ok(Some(t)) = read_token(&mut s) {
             r.push(t);

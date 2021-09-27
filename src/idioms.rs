@@ -1,6 +1,6 @@
 //! Common tasks in parsing
 
-use std::{str::Chars};
+use crate::chars::Chars;
 
 use crate::err::TokenizeError;
 
@@ -63,7 +63,7 @@ pub (crate) use read_one_or_more;
 /// assert_eq!(Err(TokenizeError::LitteralDidntMatch), read_string(&other, 0usize, "POST"));
 /// ```
 pub(crate) fn read_string<'a, 'b: 'a>(
-    input: &'a mut std::iter::Peekable<Chars<'b>>,
+    input: &'a mut std::iter::Peekable<Chars>,
     s: &str,
 ) -> ReaderResult<()> {
     for sc in s.chars() {
