@@ -1,6 +1,6 @@
 use crate::token::Token;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenizeError {
     InputEndedEarly,
     ExpectedADigit,
@@ -16,9 +16,10 @@ pub enum TokenizeError {
     InputTooLong,
     /// Occurs when there is a bug
     InternalError(ErrorLoc),
+    InvalidUTF8,
 }
 /// Represents the location in the source code where an error occured
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ErrorLoc {
     file: &'static str,
     line: u32,
