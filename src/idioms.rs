@@ -69,7 +69,7 @@ pub(crate) fn read_string<'a, 'b: 'a>(
     for sc in s.chars() {
         match input.next() {
             Some(ic) => {
-                if ic? != sc {
+                if ic != sc {
                     return Err(TokenizeError::LitteralDidntMatch);
                 }
             }

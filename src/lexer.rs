@@ -10,19 +10,37 @@ use crate::{
 use std::ops::ShlAssign;
 pub(crate) struct Lexer<'a> {
     input: &'a mut std::iter::Peekable<Chars>,
+    pub(crate) status: Option<Result<(), TokenizeError>>,
 }
 
 impl<'a> Lexer<'a> {
     pub(crate) fn new(input: &'a mut std::iter::Peekable<Chars>) -> Self {
-        Self { input }
+        Self {
+            input,
+            status: None,
+        }
     }
 }
 
 impl Iterator for Lexer<'_> {
-    type Item = ReaderResult<Token>;
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        read_token(self.input).transpose()
+        if let None = self.status {
+            match read_token(self.input) {
+                Ok(Some(s)) => Some(s),
+                Ok(None) => {
+                    self.status = Some(Ok(()));
+                    None
+                }
+                Err(e) => {
+                    self.status = Some(Err(e));
+                    None
+                }
+            }
+        } else {
+            None
+        }
     }
 }
 
@@ -36,7 +54,7 @@ pub(crate) fn read_token<'a>(
     input: &'a mut std::iter::Peekable<Chars>,
 ) -> ReaderResult<Option<Token>> {
     if let Some(c) = input.peek() {
-        match (c.clone())? {
+        match c {
             '0'..='9' | '-' => match read_number(input) {
                 Ok(n) => Ok(Some(Token::Number(n))),
                 Err(e) => Err(e),
@@ -111,7 +129,7 @@ fn read_number<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Numbe
 /// Reads a decimal digit.
 fn read_digit<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Digit> {
     match input.peek() {
-        Some(c) => match c.clone()? {
+        Some(c) => match c {
             '0' => {
                 input.next();
                 Ok(Digit::D0)
@@ -160,7 +178,7 @@ fn read_digit<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Digit>
 
 /// Reads RFC 8259 JSON white space.
 fn read_white_space<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
-    while let Some(Ok(' ' | '\t' | '\x0A' | '\x0D')) = input.peek() {
+    while let Some(' ' | '\t' | '\x0A' | '\x0D') = input.peek() {
         input.next();
     }
     Ok(())
@@ -184,7 +202,7 @@ fn read_int<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Vec<Digi
 /// Reads the fractional part of a RFC 8259 JSON number.
 fn read_frac<'a>(input: &'a mut std::iter::Peekable<Chars>) -> ReaderResult<Option<Vec<Digit>>> {
     if let Some(c) = input.peek() {
-        if c.clone()? == '.' {
+        if c.clone() == '.' {
             input.next();
             let frac = read_one_or_more!(input, read_digit)?;
             Ok(Some(frac))
@@ -201,7 +219,7 @@ fn read_exp<'a>(
     input: &'a mut std::iter::Peekable<Chars>,
 ) -> ReaderResult<Option<(Sign, Vec<Digit>)>> {
     match input.peek().as_ref() {
-        Some(Ok('e' | 'E')) => {
+        Some('e' | 'E') => {
             input.next();
             let sign = read_pn_sign(input)?;
             let exp = read_one_or_more!(input, read_digit)?;
@@ -218,7 +236,7 @@ fn read_exp<'a>(
 /// Reads an optional negative sign (`'-'`).
 fn read_neg_sign<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sign> {
     match input.peek() {
-        Some(Ok('-')) => match input.next() {
+        Some('-') => match input.next() {
             Some(_) => Ok(Sign::Negative),
             None => Err(internal_error!()),
         },
@@ -229,11 +247,11 @@ fn read_neg_sign<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sig
 /// Reads an optional positive sign (`'+'`) or a negative sign (`'-'`).
 fn read_pn_sign<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sign> {
     match input.peek().as_ref() {
-        Some(Ok('-')) => match input.next() {
+        Some('-') => match input.next() {
             Some(_) => Ok(Sign::Negative),
             None => Err(internal_error!()),
         },
-        Some(Ok('+')) => match input.next() {
+        Some('+') => match input.next() {
             Some(_) => Ok(Sign::Positive),
             None => Err(internal_error!()),
         },
@@ -248,25 +266,24 @@ fn read_pn_sign<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sign
 /// Reads RFC8259 JSON string.
 fn read_string<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<String> {
     let mut a = String::new();
-    while let Some(c) = input.peek() {
-        match c.as_ref() {
-            Ok('\u{0000}'..='\u{001F}') => return Err(TokenizeError::ControlCharacterUnescaped),
-            Ok('\\') => {
+    while let Some(&c) = input.peek() {
+        match c {
+            '\u{0000}'..='\u{001F}' => return Err(TokenizeError::ControlCharacterUnescaped),
+            '\\' => {
                 input.next();
                 match read_escape_sequence(input) {
                     Ok(r) => a.push(r),
                     Err(e) => return Err(e),
                 }
             }
-            Ok('"') => {
+            '"' => {
                 input.next();
                 return Ok(a);
             }
-            Ok(&c) => {
+            c => {
                 input.next();
                 a.push(c)
             }
-            Err(e) => return Err(e.clone()),
         }
     }
     Err(TokenizeError::InputEndedEarly)
@@ -303,7 +320,7 @@ fn read_ull<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
 /// | %x75 4HEXDIG | uXXXX|                | U+XXXX |
 fn read_escape_sequence<'a>(input: &'a mut std::iter::Peekable<Chars>) -> ReaderResult<char> {
     if let Some(c) = input.next() {
-        match c? {
+        match c {
             '"' => Ok('"'),
             '\\' => Ok('\\'),
             '/' => Ok('/'),
@@ -378,13 +395,12 @@ fn read_escape_sequence<'a>(input: &'a mut std::iter::Peekable<Chars>) -> Reader
 /// ```
 fn read_hexdigit<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<u8> {
     match input.next() {
-        Some(Ok(c)) => match c {
+        Some(c) => match c {
             '0'..='9' => Ok(c as u8 - b'0'),
             'a'..='f' => Ok(c as u8 - b'a' + 10_u8),
             'A'..='F' => Ok(c as u8 - b'A' + 10_u8),
             _ => Err(TokenizeError::ExpectedAHexdigit),
         },
-        Some(Err(e)) => Err(e),
         None => Err(TokenizeError::InputEndedEarly),
     }
 }
@@ -805,7 +821,7 @@ mod tests {
             s.next();
             let r = read_string(&mut s);
             assert_eq!(Ok("\t\tSome \"centered\" line\t\t\r\n".to_string()), r);
-            let s: Vec<char> = s.map(|r| r.expect("UTF8")).collect();
+            let s: Vec<char> = s.collect();
             let end: Vec<char> = post.chars().skip(1usize).collect();
             assert_eq!(s, end)
         }
@@ -1009,7 +1025,7 @@ mod tests {
             let s = "    a";
             let mut s = Chars::from(s).peekable();
             let _ = read_white_space(&mut s);
-            let s: Vec<char> = s.map(|r| r.expect("UTF8")).collect();
+            let s: Vec<char> = s.collect();
             assert_eq!(s, vec!['a']);
         }
     }

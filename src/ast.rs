@@ -1,7 +1,7 @@
 use crate::{
     chars::Chars,
     err::{internal_error, TokenizeError},
-    lexer::{self, Lexer},
+    lexer::Lexer,
     token::Token,
     value::Value,
 };
@@ -22,227 +22,224 @@ impl<'a> Parser<'a> {
         let mut key_stack: Vec<String> = Vec::new();
         let input = &mut self.lexer;
         while let Some(t) = input.next() {
-            match t {
-                Ok(t) => match state {
-                    ParserState::Begin => match t {
-                        Token::ArrayBegin => {
-                            state = ParserState::InArrayEmpty;
-                            stack.push(AST::new_array());
-                        }
-                        Token::ObjectBegin => {
-                            state = ParserState::InObjectEmpty;
-                            stack.push(AST::new_object());
-                        }
-                        Token::False => state = ParserState::End(Value::False),
-                        Token::True => state = ParserState::End(Value::True),
-                        Token::Null => state = ParserState::End(Value::Null),
-                        Token::String(s) => state = ParserState::End(Value::String(s)),
-                        Token::Number(n) => state = ParserState::End(Value::Number(n)),
-                        Token::WhiteSpace => continue,
-                        Token::ArrayEnd
-                        | Token::ObjectEnd
-                        | Token::NameSeparator
-                        | Token::ValueSeparator => return Err(TokenizeError::UnexpectedToken(t)),
-                    },
-                    ParserState::InArrayEmpty => match t {
-                        Token::ArrayBegin => {
-                            state = ParserState::InArrayEmpty;
-                            stack.push(AST::new_array());
-                        }
-                        Token::ObjectBegin => {
-                            state = ParserState::InObjectEmpty;
-                            stack.push(AST::new_object());
-                        }
-                        Token::False => {
-                            stack
-                                .last_mut()
-                                .ok_or_else(|| internal_error!())?
-                                .push(Value::False, None)?;
-                            state = ParserState::InArrayLastWasValue
-                        }
-                        Token::True => {
-                            stack
-                                .last_mut()
-                                .ok_or_else(|| internal_error!())?
-                                .push(Value::True, None)?;
-                            state = ParserState::InArrayLastWasValue
-                        }
-                        Token::Null => {
-                            stack
-                                .last_mut()
-                                .ok_or_else(|| internal_error!())?
-                                .push(Value::Null, None)?;
-                            state = ParserState::InArrayLastWasValue
-                        }
-                        Token::String(s) => {
-                            stack
-                                .last_mut()
-                                .ok_or_else(|| internal_error!())?
-                                .push(Value::String(s), None)?;
-                            state = ParserState::InArrayLastWasValue
-                        }
-                        Token::Number(n) => {
-                            stack
-                                .last_mut()
-                                .ok_or_else(|| internal_error!())?
-                                .push(Value::Number(n), None)?;
-                            state = ParserState::InArrayLastWasValue
-                        }
-                        Token::WhiteSpace => continue,
-                        Token::ArrayEnd => array_end(&mut state, &mut stack, &mut key_stack)?,
-                        Token::ValueSeparator => return Err(TokenizeError::UnexpectedToken(t)),
-                        Token::NameSeparator | Token::ObjectEnd => {
-                            return Err(TokenizeError::UnexpectedToken(t))
-                        }
-                    },
-                    ParserState::InArrayLastWasValue => match t {
-                        Token::ValueSeparator => state = ParserState::InArrayLastWasDelim,
-                        Token::ArrayEnd => array_end(&mut state, &mut stack, &mut key_stack)?,
-                        Token::WhiteSpace => continue,
-                        _ => return Err(TokenizeError::UnexpectedToken(t)),
-                    },
-                    ParserState::InArrayLastWasDelim => match t {
-                        Token::ArrayBegin => {
-                            state = ParserState::InArrayEmpty;
-                            stack.push(AST::new_array());
-                        }
-                        Token::ObjectBegin => {
-                            state = ParserState::InObjectEmpty;
-                            stack.push(AST::new_object());
-                        }
-                        Token::False => {
-                            stack
-                                .last_mut()
-                                .ok_or_else(|| internal_error!())?
-                                .push(Value::False, None)?;
-                            state = ParserState::InArrayLastWasValue
-                        }
-                        Token::True => {
-                            stack
-                                .last_mut()
-                                .ok_or_else(|| internal_error!())?
-                                .push(Value::True, None)?;
-                            state = ParserState::InArrayLastWasValue
-                        }
-                        Token::Null => {
-                            stack
-                                .last_mut()
-                                .ok_or_else(|| internal_error!())?
-                                .push(Value::Null, None)?;
-                            state = ParserState::InArrayLastWasValue
-                        }
-                        Token::String(s) => {
-                            stack
-                                .last_mut()
-                                .ok_or_else(|| internal_error!())?
-                                .push(Value::String(s), None)?;
-                            state = ParserState::InArrayLastWasValue
-                        }
-                        Token::Number(n) => {
-                            stack
-                                .last_mut()
-                                .ok_or_else(|| internal_error!())?
-                                .push(Value::Number(n), None)?;
-                            state = ParserState::InArrayLastWasValue
-                        }
-                        Token::WhiteSpace => continue,
-                        Token::ValueSeparator | Token::ArrayEnd => {
-                            return Err(TokenizeError::UnexpectedToken(t))
-                        }
-                        Token::NameSeparator | Token::ObjectEnd => {
-                            return Err(TokenizeError::UnexpectedToken(t))
-                        }
-                    },
-                    ParserState::InObjectEmpty => match t {
-                        Token::String(s) => {
-                            key_stack.push(s);
-                            state = ParserState::InObjectLastWasKey;
-                        }
-                        Token::ObjectEnd => object_end(&mut state, &mut stack, &mut key_stack)?,
-                        Token::WhiteSpace => continue,
-                        _ => return Err(TokenizeError::UnexpectedToken(t)),
-                    },
-                    ParserState::InObjectLastWasKey => match t {
-                        Token::NameSeparator => state = ParserState::InObjectLastWasNameDelim,
-                        Token::WhiteSpace => continue,
-                        _ => return Err(TokenizeError::UnexpectedToken(t)),
-                    },
-                    ParserState::InObjectLastWasNameDelim => match t {
-                        Token::ArrayBegin => {
-                            state = ParserState::InArrayEmpty;
-                            stack.push(AST::new_array());
-                        }
-                        Token::ObjectBegin => {
-                            state = ParserState::InObjectEmpty;
-                            stack.push(AST::new_object());
-                        }
-                        Token::False => {
-                            stack.last_mut().ok_or_else(|| internal_error!())?.push(
-                                Value::False,
-                                Some(key_stack.pop().ok_or_else(|| internal_error!())?),
-                            )?;
-                            state = ParserState::InObjectLastWasValue
-                        }
-                        Token::True => {
-                            stack.last_mut().ok_or_else(|| internal_error!())?.push(
-                                Value::True,
-                                Some(key_stack.pop().ok_or_else(|| internal_error!())?),
-                            )?;
-                            state = ParserState::InObjectLastWasValue
-                        }
-                        Token::Null => {
-                            stack.last_mut().ok_or_else(|| internal_error!())?.push(
-                                Value::Null,
-                                Some(key_stack.pop().ok_or_else(|| internal_error!())?),
-                            )?;
-                            state = ParserState::InObjectLastWasValue
-                        }
-                        Token::String(s) => {
-                            stack.last_mut().ok_or_else(|| internal_error!())?.push(
-                                Value::String(s),
-                                Some(key_stack.pop().ok_or_else(|| internal_error!())?),
-                            )?;
-                            state = ParserState::InObjectLastWasValue
-                        }
-                        Token::Number(n) => {
-                            stack.last_mut().ok_or_else(|| internal_error!())?.push(
-                                Value::Number(n),
-                                Some(key_stack.pop().ok_or_else(|| internal_error!())?),
-                            )?;
-                            state = ParserState::InObjectLastWasValue
-                        }
-                        Token::WhiteSpace => continue,
-                        Token::ValueSeparator | Token::ArrayEnd => {
-                            return Err(TokenizeError::UnexpectedToken(t))
-                        }
-                        Token::NameSeparator | Token::ObjectEnd => {
-                            return Err(TokenizeError::UnexpectedToken(t))
-                        }
-                    },
-                    ParserState::InObjectLastWasValue => match t {
-                        Token::ValueSeparator => state = ParserState::InObjectLastWasDelim,
-                        Token::ObjectEnd => object_end(&mut state, &mut stack, &mut key_stack)?,
-                        Token::WhiteSpace => continue,
-                        _ => return Err(TokenizeError::UnexpectedToken(t)),
-                    },
-                    ParserState::InObjectLastWasDelim => match t {
-                        Token::String(s) => {
-                            key_stack.push(s);
-                            state = ParserState::InObjectLastWasKey;
-                        }
-                        Token::WhiteSpace => continue,
-                        _ => return Err(TokenizeError::UnexpectedToken(t)),
-                    },
-                    ParserState::End(_) => match t {
-                        Token::WhiteSpace => match input.next() {
-                            Some(Ok(_)) => return Err(TokenizeError::InputTooLong),
-                            Some(Err(e)) => return Err(e),
-                            None => break,
-                        },
-                        _ => return Err(TokenizeError::InputTooLong),
-                    },
+            match state {
+                ParserState::Begin => match t {
+                    Token::ArrayBegin => {
+                        state = ParserState::InArrayEmpty;
+                        stack.push(AST::new_array());
+                    }
+                    Token::ObjectBegin => {
+                        state = ParserState::InObjectEmpty;
+                        stack.push(AST::new_object());
+                    }
+                    Token::False => state = ParserState::End(Value::False),
+                    Token::True => state = ParserState::End(Value::True),
+                    Token::Null => state = ParserState::End(Value::Null),
+                    Token::String(s) => state = ParserState::End(Value::String(s)),
+                    Token::Number(n) => state = ParserState::End(Value::Number(n)),
+                    Token::WhiteSpace => continue,
+                    Token::ArrayEnd
+                    | Token::ObjectEnd
+                    | Token::NameSeparator
+                    | Token::ValueSeparator => return Err(TokenizeError::UnexpectedToken(t)),
                 },
-                Err(e) => return Err(e),
+                ParserState::InArrayEmpty => match t {
+                    Token::ArrayBegin => {
+                        state = ParserState::InArrayEmpty;
+                        stack.push(AST::new_array());
+                    }
+                    Token::ObjectBegin => {
+                        state = ParserState::InObjectEmpty;
+                        stack.push(AST::new_object());
+                    }
+                    Token::False => {
+                        stack
+                            .last_mut()
+                            .ok_or_else(|| internal_error!())?
+                            .push(Value::False, None)?;
+                        state = ParserState::InArrayLastWasValue
+                    }
+                    Token::True => {
+                        stack
+                            .last_mut()
+                            .ok_or_else(|| internal_error!())?
+                            .push(Value::True, None)?;
+                        state = ParserState::InArrayLastWasValue
+                    }
+                    Token::Null => {
+                        stack
+                            .last_mut()
+                            .ok_or_else(|| internal_error!())?
+                            .push(Value::Null, None)?;
+                        state = ParserState::InArrayLastWasValue
+                    }
+                    Token::String(s) => {
+                        stack
+                            .last_mut()
+                            .ok_or_else(|| internal_error!())?
+                            .push(Value::String(s), None)?;
+                        state = ParserState::InArrayLastWasValue
+                    }
+                    Token::Number(n) => {
+                        stack
+                            .last_mut()
+                            .ok_or_else(|| internal_error!())?
+                            .push(Value::Number(n), None)?;
+                        state = ParserState::InArrayLastWasValue
+                    }
+                    Token::WhiteSpace => continue,
+                    Token::ArrayEnd => array_end(&mut state, &mut stack, &mut key_stack)?,
+                    Token::ValueSeparator => return Err(TokenizeError::UnexpectedToken(t)),
+                    Token::NameSeparator | Token::ObjectEnd => {
+                        return Err(TokenizeError::UnexpectedToken(t))
+                    }
+                },
+                ParserState::InArrayLastWasValue => match t {
+                    Token::ValueSeparator => state = ParserState::InArrayLastWasDelim,
+                    Token::ArrayEnd => array_end(&mut state, &mut stack, &mut key_stack)?,
+                    Token::WhiteSpace => continue,
+                    _ => return Err(TokenizeError::UnexpectedToken(t)),
+                },
+                ParserState::InArrayLastWasDelim => match t {
+                    Token::ArrayBegin => {
+                        state = ParserState::InArrayEmpty;
+                        stack.push(AST::new_array());
+                    }
+                    Token::ObjectBegin => {
+                        state = ParserState::InObjectEmpty;
+                        stack.push(AST::new_object());
+                    }
+                    Token::False => {
+                        stack
+                            .last_mut()
+                            .ok_or_else(|| internal_error!())?
+                            .push(Value::False, None)?;
+                        state = ParserState::InArrayLastWasValue
+                    }
+                    Token::True => {
+                        stack
+                            .last_mut()
+                            .ok_or_else(|| internal_error!())?
+                            .push(Value::True, None)?;
+                        state = ParserState::InArrayLastWasValue
+                    }
+                    Token::Null => {
+                        stack
+                            .last_mut()
+                            .ok_or_else(|| internal_error!())?
+                            .push(Value::Null, None)?;
+                        state = ParserState::InArrayLastWasValue
+                    }
+                    Token::String(s) => {
+                        stack
+                            .last_mut()
+                            .ok_or_else(|| internal_error!())?
+                            .push(Value::String(s), None)?;
+                        state = ParserState::InArrayLastWasValue
+                    }
+                    Token::Number(n) => {
+                        stack
+                            .last_mut()
+                            .ok_or_else(|| internal_error!())?
+                            .push(Value::Number(n), None)?;
+                        state = ParserState::InArrayLastWasValue
+                    }
+                    Token::WhiteSpace => continue,
+                    Token::ValueSeparator | Token::ArrayEnd => {
+                        return Err(TokenizeError::UnexpectedToken(t))
+                    }
+                    Token::NameSeparator | Token::ObjectEnd => {
+                        return Err(TokenizeError::UnexpectedToken(t))
+                    }
+                },
+                ParserState::InObjectEmpty => match t {
+                    Token::String(s) => {
+                        key_stack.push(s);
+                        state = ParserState::InObjectLastWasKey;
+                    }
+                    Token::ObjectEnd => object_end(&mut state, &mut stack, &mut key_stack)?,
+                    Token::WhiteSpace => continue,
+                    _ => return Err(TokenizeError::UnexpectedToken(t)),
+                },
+                ParserState::InObjectLastWasKey => match t {
+                    Token::NameSeparator => state = ParserState::InObjectLastWasNameDelim,
+                    Token::WhiteSpace => continue,
+                    _ => return Err(TokenizeError::UnexpectedToken(t)),
+                },
+                ParserState::InObjectLastWasNameDelim => match t {
+                    Token::ArrayBegin => {
+                        state = ParserState::InArrayEmpty;
+                        stack.push(AST::new_array());
+                    }
+                    Token::ObjectBegin => {
+                        state = ParserState::InObjectEmpty;
+                        stack.push(AST::new_object());
+                    }
+                    Token::False => {
+                        stack.last_mut().ok_or_else(|| internal_error!())?.push(
+                            Value::False,
+                            Some(key_stack.pop().ok_or_else(|| internal_error!())?),
+                        )?;
+                        state = ParserState::InObjectLastWasValue
+                    }
+                    Token::True => {
+                        stack.last_mut().ok_or_else(|| internal_error!())?.push(
+                            Value::True,
+                            Some(key_stack.pop().ok_or_else(|| internal_error!())?),
+                        )?;
+                        state = ParserState::InObjectLastWasValue
+                    }
+                    Token::Null => {
+                        stack.last_mut().ok_or_else(|| internal_error!())?.push(
+                            Value::Null,
+                            Some(key_stack.pop().ok_or_else(|| internal_error!())?),
+                        )?;
+                        state = ParserState::InObjectLastWasValue
+                    }
+                    Token::String(s) => {
+                        stack.last_mut().ok_or_else(|| internal_error!())?.push(
+                            Value::String(s),
+                            Some(key_stack.pop().ok_or_else(|| internal_error!())?),
+                        )?;
+                        state = ParserState::InObjectLastWasValue
+                    }
+                    Token::Number(n) => {
+                        stack.last_mut().ok_or_else(|| internal_error!())?.push(
+                            Value::Number(n),
+                            Some(key_stack.pop().ok_or_else(|| internal_error!())?),
+                        )?;
+                        state = ParserState::InObjectLastWasValue
+                    }
+                    Token::WhiteSpace => continue,
+                    Token::ValueSeparator | Token::ArrayEnd => {
+                        return Err(TokenizeError::UnexpectedToken(t))
+                    }
+                    Token::NameSeparator | Token::ObjectEnd => {
+                        return Err(TokenizeError::UnexpectedToken(t))
+                    }
+                },
+                ParserState::InObjectLastWasValue => match t {
+                    Token::ValueSeparator => state = ParserState::InObjectLastWasDelim,
+                    Token::ObjectEnd => object_end(&mut state, &mut stack, &mut key_stack)?,
+                    Token::WhiteSpace => continue,
+                    _ => return Err(TokenizeError::UnexpectedToken(t)),
+                },
+                ParserState::InObjectLastWasDelim => match t {
+                    Token::String(s) => {
+                        key_stack.push(s);
+                        state = ParserState::InObjectLastWasKey;
+                    }
+                    Token::WhiteSpace => continue,
+                    _ => return Err(TokenizeError::UnexpectedToken(t)),
+                },
+                ParserState::End(_) => match t {
+                    Token::WhiteSpace => match &(input.status) {
+                        Some(Ok(())) => break,
+                        Some(Err(e)) => return Err(e.clone()),
+                        None => return Err(TokenizeError::InputTooLong),
+                    },
+                    _ => return Err(TokenizeError::InputTooLong),
+                },
             }
         }
 

@@ -1,47 +1,71 @@
 use std::char::from_u32;
 
-use crate::{err::TokenizeError, idioms::ReaderResult};
+use crate::err::TokenizeError;
 
 pub struct Chars {
     inner: Box<dyn Iterator<Item = u8>>,
+    pub(crate) status: Option<Result<(), TokenizeError>>,
 }
 
 impl Chars {
     pub fn new(inner: Box<dyn Iterator<Item = u8>>) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            status: None,
+        }
     }
 }
 
 impl Iterator for Chars {
-    type Item = ReaderResult<char>;
+    type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let n = self.inner.next()?;
-        if n == 0u8 {
-            return Some(Ok('\0'));
-        } else {
-            if n >> 7 == 0 {
-                return Ok(char::from_u32(n as u32)).transpose();
-            };
-            let (k, mut c) = if n >> 5 == 0b110 {
-                (1, (n & !(0b110 << 5)) as u32)
-            } else if n >> 4 == 0b1110 {
-                (2, (n & !(0b1110 << 4)) as u32)
-            } else if n >> 3 == 0b11110 {
-                (3, (n & !(0b11110 << 3)) as u32)
-            } else {
-                return Some(Err(TokenizeError::InvalidUTF8));
-            };
-            for _ in 1..=k {
-                let n = self.inner.next()?;
-                if n & (0b10 << 6) == (0b10 << 6) {
-                    c <<= 6;
-                    c |= (n & !(0b10 << 6)) as u32;
+        match self.inner.next() {
+            None => {
+                self.status = Some(Ok(()));
+                None
+            }
+            Some(n) => {
+                if n == 0u8 {
+                    return Some('\0');
+                } else if n >> 7 == 0 {
+                    match char::from_u32(n as u32) {
+                        Some(c) => Some(c),
+                        None => {
+                            self.status = Some(Err(TokenizeError::InvalidUTF8));
+                            None
+                        }
+                    }
                 } else {
-                    return Some(Err(TokenizeError::InvalidUTF8));
+                    let (k, mut c) = if n >> 5 == 0b110 {
+                        (1, (n & !(0b110 << 5)) as u32)
+                    } else if n >> 4 == 0b1110 {
+                        (2, (n & !(0b1110 << 4)) as u32)
+                    } else if n >> 3 == 0b11110 {
+                        (3, (n & !(0b11110 << 3)) as u32)
+                    } else {
+                        self.status = Some(Err(TokenizeError::InvalidUTF8));
+                        return None;
+                    };
+                    for _ in 1..=k {
+                        let n = self.inner.next()?;
+                        if n & (0b10 << 6) == (0b10 << 6) {
+                            c <<= 6;
+                            c |= (n & !(0b10 << 6)) as u32;
+                        } else {
+                            self.status = Some(Err(TokenizeError::InvalidUTF8));
+                            return None;
+                        }
+                    }
+                    match from_u32(c) {
+                        Some(c) => Some(c),
+                        None => {
+                            self.status = Some(Err(TokenizeError::InvalidUTF8));
+                            None
+                        }
+                    }
                 }
             }
-            return Ok(from_u32(c)).transpose();
         }
     }
 }
@@ -68,7 +92,6 @@ mod tests {
     fn ascii() {
         let s: Chars = "\0abcd".into();
         let t = "\0abcd".chars();
-        let s = s.map(|e| e.expect("Invalid unicode."));
         assert!(s.eq(t));
     }
 
@@ -76,7 +99,6 @@ mod tests {
     fn two_bytes() {
         let s: Chars = "é".into();
         let t = "é".chars();
-        let s = s.map(|e| e.expect("Invalid unicode."));
         assert!(s.eq(t));
     }
 
@@ -84,7 +106,6 @@ mod tests {
     fn three_bytes() {
         let s: Chars = "€".into();
         let t = "€".chars();
-        let s = s.map(|e| e.expect("Invalid unicode."));
         assert!(s.eq(t));
     }
 
@@ -94,8 +115,6 @@ mod tests {
         let s2: Chars = "a𝄞a".into();
         let t = "a𝄞a".chars();
         let t2 = "a𝄞a".chars();
-        let s = s.map(|e| e.expect("Invalid unicode."));
-        let s2 = s2.map(|e| e.expect("Invalid unicode."));
 
         if s.ne(t) {
             for (cs, ct) in s2.zip(t2) {
@@ -309,7 +328,7 @@ Box drawing alignment tests:                                          █
   ╚══╩══╝  └──┴──┘  ╰──┴──╯  ╰──┴──╯  ┗━━┻━━┛           └╌╌┘ ╎ ┗╍╍┛ ┋  ▁▂▃▄▅▆▇█"#
             .to_string();
         let s: Chars = o.clone().into();
-        let s: String = s.map(|e| e.unwrap()).collect();
+        let s: String = s.collect();
         assert_eq!(s, o);
     }
 }
