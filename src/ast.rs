@@ -1,10 +1,9 @@
-
 use crate::{
+    chars::Chars,
     err::{internal_error, TokenizeError},
-    lexer::Lexer,
+    lexer::{self, Lexer},
     token::Token,
     value::Value,
-    chars::Chars,
 };
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
@@ -371,8 +370,6 @@ fn object_end(
         Err(internal_error!())
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

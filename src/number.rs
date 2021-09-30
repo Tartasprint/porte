@@ -8,7 +8,7 @@ pub struct Number {
     pub(crate) sign: Sign,
     pub(crate) int: Vec<Digit>,
     pub(crate) frac: Option<Vec<Digit>>,
-    pub(crate) exp: Option<Exp>
+    pub(crate) exp: Option<Exp>,
 }
 
 impl Number {
@@ -25,13 +25,13 @@ impl Number {
         sign: Sign,
         int: Vec<Digit>,
         frac: Option<Vec<Digit>>,
-        exp: Option<(Sign,Vec<Digit>)>
+        exp: Option<(Sign, Vec<Digit>)>,
     ) -> Self {
         Self {
             sign,
             int,
             frac,
-            exp: exp.map(|(s,v)| Exp { s, v }),
+            exp: exp.map(|(s, v)| Exp { s, v }),
         }
     }
 }
@@ -40,11 +40,11 @@ impl Number {
 #[allow(missing_docs)]
 pub(crate) enum Sign {
     Positive,
-    Negative
+    Negative,
 }
 
 /// Representation of decimal digit.
-#[derive(PartialEq, Eq, Debug,Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 #[allow(missing_docs)]
 pub(crate) enum Digit {
     D0,
@@ -61,7 +61,7 @@ pub(crate) enum Digit {
 
 /// Representation of an exponent
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub(crate) struct Exp{
+pub(crate) struct Exp {
     pub(crate) s: Sign,
     pub(crate) v: Vec<Digit>,
 }

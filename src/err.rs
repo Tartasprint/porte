@@ -59,5 +59,5 @@ macro_rules! debug {
     };
 }
 
-pub(crate) use internal_error;
 pub(crate) use debug;
+pub(crate) use internal_error;

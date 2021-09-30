@@ -47,7 +47,7 @@ macro_rules! read_one_or_more {
     }};
 }
 
-pub (crate) use read_one_or_more;
+pub(crate) use read_one_or_more;
 /// A `Reader` with one more argument. Used to parse a constant string.
 ///
 /// # Example

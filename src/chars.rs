@@ -1,4 +1,4 @@
-use std::{char::from_u32};
+use std::char::from_u32;
 
 use crate::{err::TokenizeError, idioms::ReaderResult};
 
@@ -8,9 +8,7 @@ pub struct Chars {
 
 impl Chars {
     pub fn new(inner: Box<dyn Iterator<Item = u8>>) -> Self {
-        Self {
-            inner,
-        }
+        Self { inner }
     }
 }
 
@@ -29,7 +27,7 @@ impl Iterator for Chars {
                 (1, (n & !(0b110 << 5)) as u32)
             } else if n >> 4 == 0b1110 {
                 (2, (n & !(0b1110 << 4)) as u32)
-            } else if n  >> 3 == 0b11110 {
+            } else if n >> 3 == 0b11110 {
                 (3, (n & !(0b11110 << 3)) as u32)
             } else {
                 return Some(Err(TokenizeError::InvalidUTF8));
@@ -68,7 +66,7 @@ mod tests {
 
     #[test]
     fn ascii() {
-        let s : Chars = "\0abcd".into();
+        let s: Chars = "\0abcd".into();
         let t = "\0abcd".chars();
         let s = s.map(|e| e.expect("Invalid unicode."));
         assert!(s.eq(t));
@@ -76,7 +74,7 @@ mod tests {
 
     #[test]
     fn two_bytes() {
-        let s : Chars = "é".into();
+        let s: Chars = "é".into();
         let t = "é".chars();
         let s = s.map(|e| e.expect("Invalid unicode."));
         assert!(s.eq(t));
@@ -84,7 +82,7 @@ mod tests {
 
     #[test]
     fn three_bytes() {
-        let s : Chars = "€".into();
+        let s: Chars = "€".into();
         let t = "€".chars();
         let s = s.map(|e| e.expect("Invalid unicode."));
         assert!(s.eq(t));
@@ -92,15 +90,15 @@ mod tests {
 
     #[test]
     fn four_bytes() {
-        let s : Chars = "a𝄞a".into();
-        let s2 : Chars = "a𝄞a".into();
+        let s: Chars = "a𝄞a".into();
+        let s2: Chars = "a𝄞a".into();
         let t = "a𝄞a".chars();
         let t2 = "a𝄞a".chars();
         let s = s.map(|e| e.expect("Invalid unicode."));
         let s2 = s2.map(|e| e.expect("Invalid unicode."));
 
         if s.ne(t) {
-            for (cs,ct) in s2.zip(t2) {
+            for (cs, ct) in s2.zip(t2) {
                 eprintln!("{} {}", cs, ct);
             }
             panic!()
@@ -109,8 +107,7 @@ mod tests {
 
     #[test]
     fn complete_test() {
-        let o : String = 
-r#"
+        let o: String = r#"
 Markus Kuhn [ˈmaʳkʊs kuːn] <mkuhn@acm.org> — 1999-08-20
 
 
@@ -309,9 +306,10 @@ Box drawing alignment tests:                                          █
   ╠╡ ╳ ╞╣  ├╢   ╟┤  ├┼─┼─┼┤  ├╫─╂─╫┤  ┣┿╾┼╼┿┫  ┕┛┖┚     ┌┄┄┐ ╎ ┏┅┅┓ ┋ ▍ ╲╱╲╱╳╳╳
   ║│╱ ╲│║  │║   ║│  ││ │ ││  │║ ┃ ║│  ┃│ ╽ │┃  ░░▒▒▓▓██ ┊  ┆ ╎ ╏  ┇ ┋ ▎
   ║└─╥─┘║  │╚═╤═╝│  │╘═╪═╛│  │╙─╀─╜│  ┃└─╂─┘┃  ░░▒▒▓▓██ ┊  ┆ ╎ ╏  ┇ ┋ ▏
-  ╚══╩══╝  └──┴──┘  ╰──┴──╯  ╰──┴──╯  ┗━━┻━━┛           └╌╌┘ ╎ ┗╍╍┛ ┋  ▁▂▃▄▅▆▇█"#.to_string();
+  ╚══╩══╝  └──┴──┘  ╰──┴──╯  ╰──┴──╯  ┗━━┻━━┛           └╌╌┘ ╎ ┗╍╍┛ ┋  ▁▂▃▄▅▆▇█"#
+            .to_string();
         let s: Chars = o.clone().into();
         let s: String = s.map(|e| e.unwrap()).collect();
-        assert_eq!(s,o);
+        assert_eq!(s, o);
     }
 }

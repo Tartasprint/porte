@@ -5,7 +5,7 @@ use libporte::{err::TokenizeError, parse};
 
 use std::{
     env,
-    fs::{File},
+    fs::File,
     io::{BufReader, Read},
     process::exit,
 };

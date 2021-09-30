@@ -1,22 +1,20 @@
 //! Functions to tokenize the text.
 
 use crate::{
+    chars::Chars,
     err::{internal_error, TokenizeError},
     idioms::{self, read_one_or_more, ReaderResult},
     number::{Digit, Number, Sign},
     token::Token,
-    chars::Chars
 };
-use std::{ops::ShlAssign};
+use std::ops::ShlAssign;
 pub(crate) struct Lexer<'a> {
     input: &'a mut std::iter::Peekable<Chars>,
 }
 
 impl<'a> Lexer<'a> {
     pub(crate) fn new(input: &'a mut std::iter::Peekable<Chars>) -> Self {
-        Self {
-            input,
-        }
+        Self { input }
     }
 }
 
@@ -37,7 +35,7 @@ const LO_SURROGATE_MAX: u32 = 0xDFFF;
 pub(crate) fn read_token<'a>(
     input: &'a mut std::iter::Peekable<Chars>,
 ) -> ReaderResult<Option<Token>> {
-    if let Some(c) = input.peek(){
+    if let Some(c) = input.peek() {
         match (c.clone())? {
             '0'..='9' | '-' => match read_number(input) {
                 Ok(n) => Ok(Some(Token::Number(n))),
@@ -184,9 +182,7 @@ fn read_int<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Vec<Digi
 }
 
 /// Reads the fractional part of a RFC 8259 JSON number.
-fn read_frac<'a>(
-    input: &'a mut std::iter::Peekable<Chars>,
-) -> ReaderResult<Option<Vec<Digit>>> {
+fn read_frac<'a>(input: &'a mut std::iter::Peekable<Chars>) -> ReaderResult<Option<Vec<Digit>>> {
     if let Some(c) = input.peek() {
         if c.clone()? == '.' {
             input.next();
@@ -269,8 +265,8 @@ fn read_string<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Strin
             Ok(&c) => {
                 input.next();
                 a.push(c)
-            },
-            Err(e) => return Err(e.clone())
+            }
+            Err(e) => return Err(e.clone()),
         }
     }
     Err(TokenizeError::InputEndedEarly)
@@ -305,9 +301,7 @@ fn read_ull<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
 /// | %x72         | r    | carriage return| U+000D |
 /// | %x74         | t    | tab            | U+0009 |
 /// | %x75 4HEXDIG | uXXXX|                | U+XXXX |
-fn read_escape_sequence<'a>(
-    input: &'a mut std::iter::Peekable<Chars>,
-) -> ReaderResult<char> {
+fn read_escape_sequence<'a>(input: &'a mut std::iter::Peekable<Chars>) -> ReaderResult<char> {
     if let Some(c) = input.next() {
         match c? {
             '"' => Ok('"'),
@@ -418,7 +412,7 @@ mod tests {
     }
 
     mod read_hexdigit {
-        use crate::{chars::Chars,err::TokenizeError};
+        use crate::{chars::Chars, err::TokenizeError};
 
         use super::super::read_hexdigit;
 
@@ -554,7 +548,7 @@ mod tests {
     }
     mod read_escape_sequence {
         use super::super::read_escape_sequence;
-        use crate::{chars::Chars,err::TokenizeError};
+        use crate::{chars::Chars, err::TokenizeError};
         test_read_x! {read_escape_sequence}
 
         #[test]
@@ -697,7 +691,7 @@ mod tests {
     }
     mod read_string {
         use super::super::read_string;
-        use crate::{chars::Chars,err::TokenizeError};
+        use crate::{chars::Chars, err::TokenizeError};
 
         test_read_x! {read_string}
 
@@ -820,9 +814,9 @@ mod tests {
         use std::vec;
 
         use super::super::read_number;
-        use crate::{chars::Chars,err::TokenizeError};
         use crate::number::Digit::{D0, D1, D2, D3, D4, D5, D6, D7, D8, D9};
         use crate::number::{Exp, Number, Sign};
+        use crate::{chars::Chars, err::TokenizeError};
         #[test]
         fn some_positive_int() {
             let s = "123";
@@ -1015,7 +1009,8 @@ mod tests {
             let s = "    a";
             let mut s = Chars::from(s).peekable();
             let _ = read_white_space(&mut s);
-            let s: Vec<char> = s.map(|r| r.expect("UTF8")).collect();            assert_eq!(s, vec!['a']);
+            let s: Vec<char> = s.map(|r| r.expect("UTF8")).collect();
+            assert_eq!(s, vec!['a']);
         }
     }
 
