@@ -2,7 +2,7 @@ use std::iter::Peekable;
 
 use crate::{
     chars::Chars,
-    err::{debug, internal_error, TokenizeError},
+    err::{internal_error, TokenizeError},
     lexer::Lexer,
     token::Token,
     value::Value,
@@ -339,18 +339,14 @@ impl Iterator for Automaton<'_> {
         } else {
             match self.state {
                 State::End => {
-                    if match self.lexer.status {
-                        Some(Ok(())) => true,
-                        _ => false,
-                    } && self.keys == 0
+                    if matches!(self.lexer.status, Some(Ok(())))
+                        && self.keys == 0
                         && self.stack.is_empty()
                     {
                         self.state = State::Ended;
                         Some(Ok(Action::TheEnd))
                     } else {
                         self.state = State::Ended;
-                        dbg!(self.keys);
-                        dbg!(self.stack.is_empty());
                         Some(Err(TokenizeError::InputTooLong))
                     }
                 }

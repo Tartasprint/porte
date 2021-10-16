@@ -29,11 +29,12 @@ fn main() {
     };
     
     let mut s = Chars::new(Box::new(s)).peekable();
-    let end = Automaton::new(&mut s).map(|x| dbg!(x)).last();
+    let end = Automaton::new(&mut s).last();
 
     match end {
         Some(Ok(Action::TheEnd)) => {exit(EXIT_VALID)},
-        Some(a) => {dbg!(a);exit(EXIT_INVALID)},
+        Some(Err(TokenizeError::InternalError(e))) => {eprintln!("{:?}",e); exit(EXIT_FAILURE)},
+        Some(_) => {exit(EXIT_INVALID)},
         None => {exit(EXIT_INVALID)}
     };
 }
