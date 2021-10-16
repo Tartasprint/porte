@@ -255,8 +255,7 @@ fn read_pn_sign(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sign> {
             Some(_) => Ok(Sign::Positive),
             None => Err(internal_error!()),
         },
-        Some(&c) => {
-            dbg!('y', c);
+        Some(_) => {
             Ok(Sign::Positive)
         }
         None => Ok(Sign::Positive),

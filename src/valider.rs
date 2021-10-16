@@ -1,6 +1,6 @@
 //! A JSON validator
 
-use libporte::automaton::Automaton;
+use libporte::automaton::{Action, Automaton};
 use libporte::chars::Chars;
 use libporte::{err::TokenizeError};
 
@@ -29,17 +29,11 @@ fn main() {
     };
     
     let mut s = Chars::new(Box::new(s)).peekable();
-    let mut a = Automaton::new(&mut s);
-    exit(match a.find(|x| x.is_err()) {
-        Some(Err(TokenizeError::InternalError(e))) => {
-            dbg!(e);
-            EXIT_FAILURE
-        },
-        Some(Err(e)) => {dbg!(e);EXIT_INVALID},
-        Some(Ok(_)) => {
-            dbg!("invalid path...");
-            EXIT_FAILURE
-        }
-        None => EXIT_VALID,
-    });
+    let end = Automaton::new(&mut s).map(|x| dbg!(x)).last();
+
+    match end {
+        Some(Ok(Action::TheEnd)) => {exit(EXIT_VALID)},
+        Some(a) => {dbg!(a);exit(EXIT_INVALID)},
+        None => {exit(EXIT_INVALID)}
+    };
 }

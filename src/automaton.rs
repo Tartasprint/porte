@@ -1,6 +1,12 @@
 use std::iter::Peekable;
 
-use crate::{chars::Chars, err::{internal_error, TokenizeError}, lexer::Lexer, token::Token, value::Value};
+use crate::{
+    chars::Chars,
+    err::{debug, internal_error, TokenizeError},
+    lexer::Lexer,
+    token::Token,
+    value::Value,
+};
 
 /// A stack-based automaton to read a stream of Tokens.
 pub struct Automaton<'a> {
@@ -29,6 +35,7 @@ impl<'a> Automaton<'a> {
                 }
                 Some(Stack::Object) => {
                     self.state = State::LastWasValueIn(Object);
+                    self.keys -= 1;
                 }
                 None => {
                     self.state = State::End;
@@ -36,6 +43,7 @@ impl<'a> Automaton<'a> {
             };
             Some(Ok(Action::Close))
         } else {
+            self.state = State::Ended;
             Some(Err(internal_error!())) //COV_IGNORE
         }
     }
@@ -48,6 +56,7 @@ impl<'a> Automaton<'a> {
                 }
                 Some(Stack::Object) => {
                     self.state = State::LastWasValueIn(Object);
+                    self.keys -= 1;
                 }
                 None => {
                     self.state = State::End;
@@ -55,18 +64,25 @@ impl<'a> Automaton<'a> {
             };
             Some(Ok(Action::Close))
         } else {
+            self.state = State::Ended;
             Some(Err(internal_error!())) //COV_IGNORE
         }
     }
+}
+
+macro_rules! debug_state {
+    ($token:expr,$state:expr) => {
+        if (cfg!(debug_assertions)) {
+            println!("{:<30}{:?}", format!("{:?}", &$token), &$state);
+        }
+    };
 }
 
 impl Iterator for Automaton<'_> {
     type Item = Result<Action, TokenizeError>;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(t) = self.lexer.next() {
-            // println!("{:<30}{:?}",
-            //     format!("{:?}",t.clone()),
-            // &self.state);
+            debug_state!(t, self.state);
             match self.state {
                 State::Begin => match t {
                     Token::ArrayBegin => {
@@ -103,7 +119,10 @@ impl Iterator for Automaton<'_> {
                     Token::ArrayEnd
                     | Token::ObjectEnd
                     | Token::NameSeparator
-                    | Token::ValueSeparator => {Some(Err(dbg!(TokenizeError::UnexpectedToken(t))))},
+                    | Token::ValueSeparator => {
+                        self.state = State::Ended;
+                        Some(Err(TokenizeError::UnexpectedToken(t)))
+                    }
                 },
                 State::InArrayEmpty => match t {
                     Token::ArrayBegin => {
@@ -138,9 +157,13 @@ impl Iterator for Automaton<'_> {
                     }
                     Token::WhiteSpace => Some(Ok(Action::Nothing)),
                     Token::ArrayEnd => self.array_end(),
-                    Token::ValueSeparator => {Some(Err(dbg!(TokenizeError::UnexpectedToken(t))))},
+                    Token::ValueSeparator => {
+                        self.state = State::Ended;
+                        Some(Err(TokenizeError::UnexpectedToken(t)))
+                    }
                     Token::NameSeparator | Token::ObjectEnd => {
-                        Some(Err(dbg!(TokenizeError::UnexpectedToken(t))))
+                        self.state = State::Ended;
+                        Some(Err(TokenizeError::UnexpectedToken(t)))
                     }
                 },
                 State::LastWasValueIn(Array) => match t {
@@ -150,7 +173,10 @@ impl Iterator for Automaton<'_> {
                     }
                     Token::ArrayEnd => self.array_end(),
                     Token::WhiteSpace => Some(Ok(Action::Nothing)),
-                    _ => {Some(Err(dbg!(TokenizeError::UnexpectedToken(t))))},
+                    _ => {
+                        self.state = State::Ended;
+                        Some(Err(TokenizeError::UnexpectedToken(t)))
+                    }
                 },
                 State::InArrayLastWasDelim => match t {
                     Token::ArrayBegin => {
@@ -185,9 +211,11 @@ impl Iterator for Automaton<'_> {
                     }
                     Token::WhiteSpace => Some(Ok(Action::Nothing)),
                     Token::ValueSeparator | Token::ArrayEnd => {
+                        self.state = State::Ended;
                         Some(Err(TokenizeError::UnexpectedToken(t)))
                     }
                     Token::NameSeparator | Token::ObjectEnd => {
+                        self.state = State::Ended;
                         Some(Err(TokenizeError::UnexpectedToken(t)))
                     }
                 },
@@ -199,7 +227,10 @@ impl Iterator for Automaton<'_> {
                     }
                     Token::ObjectEnd => self.object_end(),
                     Token::WhiteSpace => Some(Ok(Action::Nothing)),
-                    _ => Some(Err(TokenizeError::UnexpectedToken(t))),
+                    _ => {
+                        self.state = State::Ended;
+                        Some(Err(TokenizeError::UnexpectedToken(t)))
+                    }
                 },
                 State::InObjectLastWasKey => match t {
                     Token::NameSeparator => {
@@ -207,7 +238,10 @@ impl Iterator for Automaton<'_> {
                         Some(Ok(Action::Nothing))
                     }
                     Token::WhiteSpace => Some(Ok(Action::Nothing)),
-                    _ => Some(Err(TokenizeError::UnexpectedToken(t))),
+                    _ => {
+                        self.state = State::Ended;
+                        Some(Err(TokenizeError::UnexpectedToken(t)))
+                    }
                 },
                 State::InObjectLastWasNameDelim => match t {
                     Token::ArrayBegin => {
@@ -222,30 +256,37 @@ impl Iterator for Automaton<'_> {
                     }
                     Token::False => {
                         self.state = State::LastWasValueIn(Object);
+                        self.keys -= 1;
                         Some(Ok(Action::Push(Value::False)))
                     }
                     Token::True => {
                         self.state = State::LastWasValueIn(Object);
+                        self.keys -= 1;
                         Some(Ok(Action::Push(Value::True)))
                     }
                     Token::Null => {
                         self.state = State::LastWasValueIn(Object);
+                        self.keys -= 1;
                         Some(Ok(Action::Push(Value::Null)))
                     }
                     Token::String(s) => {
                         self.state = State::LastWasValueIn(Object);
+                        self.keys -= 1;
                         Some(Ok(Action::Push(Value::String(s))))
                     }
                     Token::Number(n) => {
                         self.state = State::LastWasValueIn(Object);
+                        self.keys -= 1;
                         Some(Ok(Action::Push(Value::Number(n))))
                     }
                     Token::WhiteSpace => Some(Ok(Action::Nothing)),
 
                     Token::ValueSeparator | Token::ArrayEnd => {
+                        self.state = State::Ended;
                         Some(Err(TokenizeError::UnexpectedToken(t)))
                     }
                     Token::NameSeparator | Token::ObjectEnd => {
+                        self.state = State::Ended;
                         Some(Err(TokenizeError::UnexpectedToken(t)))
                     }
                 },
@@ -256,7 +297,10 @@ impl Iterator for Automaton<'_> {
                     }
                     Token::ObjectEnd => self.object_end(),
                     Token::WhiteSpace => Some(Ok(Action::Nothing)),
-                    _ => Some(Err(TokenizeError::UnexpectedToken(t))),
+                    _ => {
+                        self.state = State::Ended;
+                        Some(Err(TokenizeError::UnexpectedToken(t)))
+                    }
                 },
                 State::InObjectLastWasDelim => match t {
                     Token::String(s) => {
@@ -265,22 +309,62 @@ impl Iterator for Automaton<'_> {
                         Some(Ok(Action::NewKey(s)))
                     }
                     Token::WhiteSpace => Some(Ok(Action::Nothing)),
-                    _ => Some(Err(TokenizeError::UnexpectedToken(t))),
+                    _ => {
+                        self.state = State::Ended;
+                        Some(Err(TokenizeError::UnexpectedToken(t)))
+                    }
                 },
-                State::End => match t {
-                    Token::WhiteSpace => match &self.lexer.status {
-                        Some(Ok(())) | None => Some(Ok(Action::TheEnd)),
-                        Some(Err(e)) => Some(Err(e.clone())),
-                    },
-                    _ => Some(Err(TokenizeError::InputTooLong)),
-                },
+                State::End => {
+                    self.state = State::Ended;
+                    match t {
+                        Token::WhiteSpace => match &self.lexer.status {
+                            Some(Ok(())) => Some(Ok(Action::TheEnd)),
+                            Some(Err(e)) => Some(Err(e.clone())),
+                            None => {
+                                if self.lexer.next().is_none() {
+                                    Some(Ok(Action::TheEnd))
+                                } else {
+                                    Some(Err(TokenizeError::InputTooLong))
+                                }
+                            }
+                        },
+                        _ => {
+                            self.state = State::Ended;
+                            Some(Err(TokenizeError::InputTooLong))
+                        }
+                    }
+                }
+                State::Ended => None,
             }
         } else {
-            None
+            match self.state {
+                State::End => {
+                    if match self.lexer.status {
+                        Some(Ok(())) => true,
+                        _ => false,
+                    } && self.keys == 0
+                        && self.stack.is_empty()
+                    {
+                        self.state = State::Ended;
+                        Some(Ok(Action::TheEnd))
+                    } else {
+                        self.state = State::Ended;
+                        dbg!(self.keys);
+                        dbg!(self.stack.is_empty());
+                        Some(Err(TokenizeError::InputTooLong))
+                    }
+                }
+                State::Ended => None,
+                _ => {
+                    self.state = State::Ended;
+                    Some(Err(TokenizeError::InputTooLong))
+                }
+            }
         }
     }
 }
 
+#[derive(Debug)]
 /// Which action should a parser do at each step of the automaton
 pub enum Action {
     /// Nothing to be done
@@ -317,4 +401,5 @@ enum State {
     InObjectLastWasDelim,
     InObjectLastWasNameDelim,
     End,
+    Ended,
 }
