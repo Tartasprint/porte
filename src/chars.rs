@@ -2,12 +2,14 @@ use std::char::from_u32;
 
 use crate::err::TokenizeError;
 
+/// An iterator for bufferized char reading
 pub struct Chars {
     inner: Box<dyn Iterator<Item = u8>>,
     pub(crate) status: Option<Result<(), TokenizeError>>,
 }
 
 impl Chars {
+    /// Create a new one
     pub fn new(inner: Box<dyn Iterator<Item = u8>>) -> Self {
         Self {
             inner,
@@ -27,7 +29,7 @@ impl Iterator for Chars {
             }
             Some(n) => {
                 if n == 0u8 {
-                    return Some('\0');
+                    Some('\0')
                 } else if n >> 7 == 0 {
                     match char::from_u32(n as u32) {
                         Some(c) => Some(c),
@@ -72,6 +74,7 @@ impl Iterator for Chars {
 
 impl From<&str> for Chars {
     fn from(x: &str) -> Self {
+        #[allow(clippy::needless_collect)]
         let b: Vec<u8> = x.bytes().collect();
         Self::new(Box::new(b.into_iter()))
     }
@@ -79,6 +82,7 @@ impl From<&str> for Chars {
 
 impl From<String> for Chars {
     fn from(x: String) -> Self {
+        #[allow(clippy::needless_collect)]
         let b: Vec<u8> = x.bytes().collect();
         Self::new(Box::new(b.into_iter()))
     }

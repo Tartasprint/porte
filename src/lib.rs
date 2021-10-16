@@ -2,22 +2,16 @@
 //! A crate for parsing JSON
 #![deny(clippy::panic, clippy::missing_panics_doc)]
 #![feature(type_alias_impl_trait)]
-
-use std::iter::Peekable;
-
-use ast::Parser;
-use chars::Chars;
-mod ast;
-pub mod chars;
-pub mod err;
 mod idioms;
 mod lexer;
 mod number;
 mod token;
 mod value;
-
-/// Parses a JSON text and returns the corresponding constructed `Value`
-pub fn parse(mut s: Peekable<Chars>) -> Result<value::Value, err::TokenizeError> {
-    let mut parser = Parser::new(&mut s);
-    parser.parse()
-}
+/// Functions to parse a JSON text
+pub mod ast;
+/// A representation for bufferized char reading
+pub mod chars;
+/// Common error types/handling
+pub mod err;
+/// A stack-based automaton to read a stream of Tokens.
+pub mod automaton;

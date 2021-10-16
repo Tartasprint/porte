@@ -1,7 +1,8 @@
 //! A JSON validator
 
+use libporte::automaton::Automaton;
 use libporte::chars::Chars;
-use libporte::{err::TokenizeError, parse};
+use libporte::{err::TokenizeError};
 
 use std::{
     env,
@@ -26,13 +27,19 @@ fn main() {
         Ok(f) => BufReader::new(f).bytes().map(|x| x.unwrap()),
         Err(_) => todo!(),
     };
-    let s = Chars::new(Box::new(s)).peekable();
-    exit(match parse(s) {
-        Ok(_) => EXIT_VALID,
-        Err(TokenizeError::InternalError(e)) => {
+    
+    let mut s = Chars::new(Box::new(s)).peekable();
+    let mut a = Automaton::new(&mut s);
+    exit(match a.find(|x| x.is_err()) {
+        Some(Err(TokenizeError::InternalError(e))) => {
             dbg!(e);
             EXIT_FAILURE
+        },
+        Some(Err(e)) => {dbg!(e);EXIT_INVALID},
+        Some(Ok(_)) => {
+            dbg!("invalid path...");
+            EXIT_FAILURE
         }
-        Err(_) => EXIT_INVALID,
-    })
+        None => EXIT_VALID,
+    });
 }

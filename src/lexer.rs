@@ -26,7 +26,7 @@ impl Iterator for Lexer<'_> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let None = self.status {
+        if self.status.is_none() {
             match read_token(self.input) {
                 Ok(Some(s)) => Some(s),
                 Ok(None) => {
@@ -50,8 +50,8 @@ const LO_SURROGATE_MIN: u32 = 0xDC00;
 const LO_SURROGATE_MAX: u32 = 0xDFFF;
 
 /// Reads a JSON token.
-pub(crate) fn read_token<'a>(
-    input: &'a mut std::iter::Peekable<Chars>,
+pub(crate) fn read_token(
+    input: &mut std::iter::Peekable<Chars>,
 ) -> ReaderResult<Option<Token>> {
     if let Some(c) = input.peek() {
         match c {
@@ -118,7 +118,7 @@ pub(crate) fn read_token<'a>(
 }
 
 /// Reads a RFC 8259 JSON number;
-fn read_number<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Number> {
+fn read_number(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Number> {
     let sign = read_neg_sign(input)?;
     let int = read_int(input)?;
     let frac = read_frac(input)?;
@@ -127,7 +127,7 @@ fn read_number<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Numbe
 }
 
 /// Reads a decimal digit.
-fn read_digit<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Digit> {
+fn read_digit(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Digit> {
     match input.peek() {
         Some(c) => match c {
             '0' => {
@@ -177,7 +177,7 @@ fn read_digit<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Digit>
 }
 
 /// Reads RFC 8259 JSON white space.
-fn read_white_space<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
+fn read_white_space(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
     while let Some(' ' | '\t' | '\x0A' | '\x0D') = input.peek() {
         input.next();
     }
@@ -185,7 +185,7 @@ fn read_white_space<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<
 }
 
 /// Reads the int part of a RFC 8259 JSON number.
-fn read_int<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Vec<Digit>> {
+fn read_int(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Vec<Digit>> {
     match read_digit(input) {
         Ok(Digit::D0) => Ok(vec![Digit::D0]),
         Ok(d) => {
@@ -200,9 +200,9 @@ fn read_int<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Vec<Digi
 }
 
 /// Reads the fractional part of a RFC 8259 JSON number.
-fn read_frac<'a>(input: &'a mut std::iter::Peekable<Chars>) -> ReaderResult<Option<Vec<Digit>>> {
+fn read_frac(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Option<Vec<Digit>>> {
     if let Some(c) = input.peek() {
-        if c.clone() == '.' {
+        if *c == '.' {
             input.next();
             let frac = read_one_or_more!(input, read_digit)?;
             Ok(Some(frac))
@@ -215,8 +215,8 @@ fn read_frac<'a>(input: &'a mut std::iter::Peekable<Chars>) -> ReaderResult<Opti
 }
 
 /// Reads the exponential part of a RFC 8259 JSON number.
-fn read_exp<'a>(
-    input: &'a mut std::iter::Peekable<Chars>,
+fn read_exp(
+    input: &mut std::iter::Peekable<Chars>,
 ) -> ReaderResult<Option<(Sign, Vec<Digit>)>> {
     match input.peek().as_ref() {
         Some('e' | 'E') => {
@@ -225,8 +225,8 @@ fn read_exp<'a>(
             let exp = read_one_or_more!(input, read_digit)?;
             Ok(Some((sign, exp)))
         }
-        Some(&c) => {
-            dbg!(c);
+        Some(&_) => {
+            //dbg!(c);
             Ok(None)
         }
         None => Ok(None),
@@ -234,7 +234,7 @@ fn read_exp<'a>(
 }
 
 /// Reads an optional negative sign (`'-'`).
-fn read_neg_sign<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sign> {
+fn read_neg_sign(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sign> {
     match input.peek() {
         Some('-') => match input.next() {
             Some(_) => Ok(Sign::Negative),
@@ -245,7 +245,7 @@ fn read_neg_sign<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sig
 }
 
 /// Reads an optional positive sign (`'+'`) or a negative sign (`'-'`).
-fn read_pn_sign<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sign> {
+fn read_pn_sign(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sign> {
     match input.peek().as_ref() {
         Some('-') => match input.next() {
             Some(_) => Ok(Sign::Negative),
@@ -264,7 +264,7 @@ fn read_pn_sign<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Sign
 }
 
 /// Reads RFC8259 JSON string.
-fn read_string<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<String> {
+fn read_string(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<String> {
     let mut a = String::new();
     while let Some(&c) = input.peek() {
         match c {
@@ -290,17 +290,17 @@ fn read_string<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<Strin
 }
 
 /// Reads a "rue" (ending of "true").
-fn read_rue<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
+fn read_rue(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
     idioms::read_string(input, "rue")
 }
 
 /// Reads a "false" (ending of "false").
-fn read_alse<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
+fn read_alse(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
     idioms::read_string(input, "alse")
 }
 
 /// Reads a "ull" (ending of "null").
-fn read_ull<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
+fn read_ull(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
     idioms::read_string(input, "ull")
 }
 
@@ -318,7 +318,7 @@ fn read_ull<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<()> {
 /// | %x72         | r    | carriage return| U+000D |
 /// | %x74         | t    | tab            | U+0009 |
 /// | %x75 4HEXDIG | uXXXX|                | U+XXXX |
-fn read_escape_sequence<'a>(input: &'a mut std::iter::Peekable<Chars>) -> ReaderResult<char> {
+fn read_escape_sequence(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<char> {
     if let Some(c) = input.next() {
         match c {
             '"' => Ok('"'),
@@ -393,7 +393,7 @@ fn read_escape_sequence<'a>(input: &'a mut std::iter::Peekable<Chars>) -> Reader
 /// let r = read_hexdigitmut (&);
 /// assert_eq!(Ok((2u8, 1)), r);
 /// ```
-fn read_hexdigit<'a>(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<u8> {
+fn read_hexdigit(input: &mut std::iter::Peekable<Chars>) -> ReaderResult<u8> {
     match input.next() {
         Some(c) => match c {
             '0'..='9' => Ok(c as u8 - b'0'),

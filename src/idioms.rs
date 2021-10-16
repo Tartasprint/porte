@@ -62,8 +62,8 @@ pub(crate) use read_one_or_more;
 /// let other:  Vec<char> = "HEAD / HTTP/1.1".chars().collect();
 /// assert_eq!(Err(TokenizeError::LitteralDidntMatch), read_string(&other, 0usize, "POST"));
 /// ```
-pub(crate) fn read_string<'a, 'b: 'a>(
-    input: &'a mut std::iter::Peekable<Chars>,
+pub(crate) fn read_string(
+    input: &mut std::iter::Peekable<Chars>,
     s: &str,
 ) -> ReaderResult<()> {
     for sc in s.chars() {
