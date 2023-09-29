@@ -44,6 +44,7 @@ impl Number {
         if self.int[0] == Digit::D0 {
 
         }
+        todo!()
     }
 }
 

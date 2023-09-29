@@ -1,8 +1,5 @@
 #!/bin/bash
 testing(){
-echo "Ok   101"
-echo "Nein 101"
-
 for f in $(ls test_suite/test_parsing/y_*)
 do
     if cargo run --release --quiet -- $f
@@ -33,4 +30,9 @@ do
 done
 }
 
-testing 2> /dev/null | grep -v "^Ok   [01] .*\$"
+if testing 2> /dev/null | grep -v "^Ok   [01] .*\$"
+then
+    echo "Atleast a test didn't pass."
+else
+    echo "Everything is ok."
+fi
