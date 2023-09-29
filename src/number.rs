@@ -1,5 +1,7 @@
 //! A representation for the JSON numbers (that could be arbitrarly large).
 
+use std::convert::TryFrom;
+
 /// Representation of a decimal number.
 /// It must have a `sign` and a non-empty `int` part (with no meaningless leading zeros).
 /// It can have a `frac`tional part and an exponent.
@@ -34,7 +36,47 @@ impl Number {
             exp: exp.map(|(s, v)| Exp { s, v }),
         }
     }
+
+    /// Transforms a Number to the canonic scientific notation
+    pub fn scientific_notation(&mut self) {
+        clear_leading_zeros(&mut self.int);
+        let new_exp = &self.exp;
+        if self.int[0] == Digit::D0 {
+
+        }
+    }
 }
+
+fn clear_leading_zeros(v: &mut Vec<Digit>) -> usize {
+    match v.iter().position(|d| d != &Digit::D0) {
+        Some(0usize) => {0usize},
+        Some(first_non_zero) => {
+            v.drain(0usize..first_non_zero);
+            first_non_zero
+        },
+        None => {
+            let r = v.len() - 1;
+            v.clear();
+            v.push(Digit::D0);
+            r
+        }
+    }
+}
+
+impl TryFrom<Number> for u64 {
+    type Error = ();
+
+    fn try_from(value: Number) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
+
+enum ConversionError {
+    NotInteger,
+    TooLarge,
+    TooPrecise,
+}
+
 /// Enum representation of a sign (either positive or negative)
 #[derive(PartialEq, Eq, Debug, Clone)]
 #[allow(missing_docs)]

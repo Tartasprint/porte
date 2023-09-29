@@ -1,16 +1,8 @@
-use std::iter::Peekable;
-
-use crate::{
-    chars::Chars,
-    err::{internal_error, TokenizeError},
-    lexer::Lexer,
-    token::Token,
-    value::Value,
-};
+use crate::{err::{internal_error, TokenizeError}, lexer::Lexer, token::Token, value::Value};
 
 /// A stack-based automaton to read a stream of Tokens.
 pub struct Automaton<'a> {
-    lexer: Lexer<'a>,
+    lexer: Box<dyn Lexer + 'a>,
     state: State,
     stack: Vec<Stack>,
     keys: usize,
@@ -18,9 +10,9 @@ pub struct Automaton<'a> {
 
 impl<'a> Automaton<'a> {
     /// Create a new JSON Automaton
-    pub fn new(input: &'a mut Peekable<Chars>) -> Self {
+    pub fn new(input: Box<dyn Lexer + 'a>) -> Self {
         Self {
-            lexer: Lexer::new(input),
+            lexer: input,
             state: State::Begin,
             stack: Vec::new(),
             keys: 0,
@@ -317,7 +309,7 @@ impl Iterator for Automaton<'_> {
                 State::End => {
                     self.state = State::Ended;
                     match t {
-                        Token::WhiteSpace => match &self.lexer.status {
+                        Token::WhiteSpace => match &self.lexer.report() {
                             Some(Ok(())) => Some(Ok(Action::TheEnd)),
                             Some(Err(e)) => Some(Err(e.clone())),
                             None => {
@@ -339,7 +331,7 @@ impl Iterator for Automaton<'_> {
         } else {
             match self.state {
                 State::End => {
-                    if matches!(self.lexer.status, Some(Ok(())))
+                    if matches!(self.lexer.report(), Some(Ok(())))
                         && self.keys == 0
                         && self.stack.is_empty()
                     {

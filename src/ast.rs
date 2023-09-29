@@ -1,9 +1,7 @@
-use std::iter::Peekable;
-
-use crate::{automaton::{Action, Automaton}, chars::Chars, err::{TokenizeError, internal_error}, value::Value};
+use crate::{automaton::{Action, Automaton}, err::{TokenizeError, internal_error}, lexer::Lexer, value::Value};
 
 /// Parse the input (and check that it's valid as whole)
-pub fn parse_and_valid(input: &mut Peekable<Chars>) -> Result<Value, TokenizeError> {
+pub fn parse_and_valid<'a>(input: Box<dyn Lexer + 'a>) -> Result<Value, TokenizeError> {
     let automaton = Automaton::new(input);
     let mut stack: Vec<Stack> = Vec::new();
     let mut keys: Vec<String> = Vec::new();
@@ -45,14 +43,15 @@ enum Stack {
 
 #[cfg(test)]
 mod tests {
+    use crate::{chars::Chars, lexer_iter::LexerIter};
+
     use super::*;
 
     #[test]
     fn easy() {
         let s = r#"[1,2,3,{}]"#;
-        let mut s = Chars::from(s).peekable();
-        let p = parse_and_valid(&mut s);
-        dbg!(s.collect::<String>());
+        let s = LexerIter::new(Chars::from(s));
+        let p = parse_and_valid(Box::new(s));
         p.unwrap();
     }
 
@@ -81,9 +80,8 @@ mod tests {
                                  "age"       : 41 }
                            ]
           } "#;
-        let mut s = Chars::from(s).peekable();
-        let p = parse_and_valid(&mut s);
-        dbg!(s.collect::<String>());
+        let s = LexerIter::new(Chars::from(s));
+        let p = parse_and_valid(Box::new(s));
         p.unwrap();
     }
 }

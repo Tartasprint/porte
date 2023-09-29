@@ -2,6 +2,7 @@
 
 use libporte::automaton::{Action, Automaton};
 use libporte::chars::Chars;
+use libporte::lexer_iter::LexerIter;
 use libporte::{err::TokenizeError};
 
 use std::{
@@ -28,8 +29,8 @@ fn main() {
         Err(_) => todo!(),
     };
     
-    let mut s = Chars::new(Box::new(s)).peekable();
-    let end = Automaton::new(&mut s).last();
+    let s = Chars::new(Box::new(s));
+    let end = Automaton::new(Box::new(LexerIter::new(s))).last();
 
     match end {
         Some(Ok(Action::TheEnd)) => {exit(EXIT_VALID)},

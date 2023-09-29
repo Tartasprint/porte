@@ -2,7 +2,10 @@
 //! A crate for parsing JSON
 #![deny(clippy::panic, clippy::missing_panics_doc)]
 #![feature(type_alias_impl_trait)]
-mod idioms;
+mod idioms_iter;
+mod idioms_slice;
+pub mod lexer_iter;
+pub mod lexer_slice;
 mod lexer;
 mod number;
 mod token;
